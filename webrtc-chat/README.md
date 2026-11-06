@@ -96,15 +96,16 @@ npm start
 
 ## Android 手机 App
 
-`android/` 是把 `/phone` 页面封装成的 Android WebView 应用：
+`android/` 把 `/phone` 和 `/device` 分别封装成两个 Android WebView 应用：
 
-- 预构建 APK：[`android/releases/webrtc-phone-debug.apk`](android/releases/webrtc-phone-debug.apk)
-- 地址写死、无手动设置：优先 `https://www.shzhihuan.cn:8443/phone`，失败自动回退 `https://192.168.1.110:8443/phone`
+- 手机 App：[`android/releases/webrtc-phone-debug.apk`](android/releases/webrtc-phone-debug.apk)，包名 `com.shzhihuan.webrtcphone`，路径 `/phone`
+- 设备 App：[`android/releases/webrtc-device-debug.apk`](android/releases/webrtc-device-debug.apk)，包名 `com.shzhihuan.webrtcdevice`，路径 `/device`，适合 Pad
+- 地址写死、无手动设置：优先 `https://www.shzhihuan.cn:8443`，失败自动回退 `https://192.168.1.110:8443`；两个应用分别拼上 `/phone`、`/device`
 - 支持摄像头/麦克风权限、自签名证书首次确认（记住 SHA-256 指纹）、横竖屏、错误重试和屏幕常亮
 - debug 签名，适合内测/侧载；正式上架请用自己的 release keystore 重新签名
-- 已构建/签名并静态校验 APK；当前构建环境无 Android 设备/KVM，未在真机启动，安装后请验证证书确认与摄像头/麦克风授权
+- 已构建/签名并静态校验两个 APK；当前构建环境无 Android 设备/KVM，未在真机启动，安装后请验证证书确认与摄像头/麦克风授权
 
-安装：下载 APK → 允许安装未知来源 → 打开应用 → 确认自签名证书 → 授权摄像头/麦克风。
+安装：下载对应 APK → 允许安装未知来源 → 打开应用 → 确认自签名证书 → 授权摄像头/麦克风。两个 App 包名不同，可同时安装。
 
 从源码构建：
 

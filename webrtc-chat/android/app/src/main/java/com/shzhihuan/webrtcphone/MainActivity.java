@@ -39,8 +39,8 @@ import java.util.Set;
  * WebView shell for the phone page.
  *
  * The server address is fixed in the APK (no in-app URL setting):
- *   1. https://www.shzhihuan.cn:8443/phone
- *   2. fallback https://192.168.1.110:8443/phone
+ *   1. https://www.shzhihuan.cn:8443 + PAGE_PATH
+ *   2. fallback https://192.168.1.110:8443 + PAGE_PATH
  *
  * The last successful base is remembered, so a LAN phone does not wait for
  * the public domain on every launch. The WebView also bridges camera/mic
@@ -51,9 +51,6 @@ public class MainActivity extends Activity {
     private static final String PREFS = "webrtc_phone";
     private static final String KEY_LAST_BASE = "last_good_base";
     private static final String KEY_TRUST_PREFIX = "trusted_cert_";
-    private static final String PHONE_PATH = "/phone";
-    private static final String PRIMARY_BASE = "https://www.shzhihuan.cn:8443";
-    private static final String FALLBACK_BASE = "https://192.168.1.110:8443";
     private static final int REQUEST_MEDIA_PERMISSIONS = 1001;
     private static final int LOAD_TIMEOUT_MS = 6000;
 
@@ -91,9 +88,9 @@ public class MainActivity extends Activity {
         retryButton.setOnClickListener(view -> retry());
 
         configureWebView();
-        String lastBase = prefs.getString(KEY_LAST_BASE, PRIMARY_BASE);
-        if (!PRIMARY_BASE.equals(lastBase) && !FALLBACK_BASE.equals(lastBase)) {
-            lastBase = PRIMARY_BASE;
+        String lastBase = prefs.getString(KEY_LAST_BASE, BuildConfig.PRIMARY_BASE);
+        if (!BuildConfig.PRIMARY_BASE.equals(lastBase) && !BuildConfig.FALLBACK_BASE.equals(lastBase)) {
+            lastBase = BuildConfig.PRIMARY_BASE;
         }
         startLoad(lastBase);
     }
@@ -233,7 +230,7 @@ public class MainActivity extends Activity {
 
     private void startLoad(String base) {
         currentBase = base;
-        currentUrl = base + PHONE_PATH;
+        currentUrl = base + BuildConfig.PAGE_PATH;
         triedBases.add(base);
         pageFinished = false;
         pageFailed = false;
@@ -256,7 +253,8 @@ public class MainActivity extends Activity {
 
     private void tryFallbackOrError(String reason) {
         if (pageFinished || sslPending) return;
-        String next = PRIMARY_BASE.equals(currentBase) ? FALLBACK_BASE : PRIMARY_BASE;
+        String next = BuildConfig.PRIMARY_BASE.equals(currentBase)
+                ? BuildConfig.FALLBACK_BASE : BuildConfig.PRIMARY_BASE;
         if (!triedBases.contains(next)) {
             Log.i(TAG, "failed " + currentBase + " (" + reason + "), trying " + next);
             startLoad(next);
@@ -270,7 +268,7 @@ public class MainActivity extends Activity {
         pageFinished = false;
         pageFailed = false;
         sslPending = false;
-        String base = currentBase == null ? PRIMARY_BASE : currentBase;
+        String base = currentBase == null ? BuildConfig.PRIMARY_BASE : currentBase;
         startLoad(base);
     }
 

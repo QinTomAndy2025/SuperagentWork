@@ -1,76 +1,86 @@
-# WebRTC 手机 Android App
+# WebRTC 手机 / 设备 Android App
 
-把 `/phone` 页面封装成 Android WebView 应用，供手机用户安装使用。
+把手机页面 `/phone` 和设备页面 `/device` 分别封装成两个 Android WebView 应用：
 
-- **地址已写死，无手动设置**
-  - 优先：`https://www.shzhihuan.cn:8443/phone`
-  - 失败自动回退：`https://192.168.1.110:8443/phone`
-  - 会记住上次成功的地址，下次优先使用
-- 支持摄像头 / 麦克风（WebView `getUserMedia` 权限桥接）
-- 支持自签名证书首次确认（记住证书 SHA-256 指纹，证书变化会再次提示）
-- 支持手机横竖屏旋转、通话时保持屏幕常亮、网络错误重试
-- 外部链接用系统浏览器打开
+| 应用 | APK | 包名 | 默认页面 |
+| --- | --- | --- | --- |
+| WebRTC 手机 | `releases/webrtc-phone-debug.apk` | `com.shzhihuan.webrtcphone` | `/phone` |
+| WebRTC 设备 | `releases/webrtc-device-debug.apk` | `com.shzhihuan.webrtcdevice` | `/device` |
 
-## 安装 APK
+两个应用可以同时安装（包名不同），分别适配手机和 Pad。
 
-预构建的 debug APK：
+## 地址（写死，无手动设置）
 
-[`releases/webrtc-phone-debug.apk`](releases/webrtc-phone-debug.apk)
-
-1. 在手机浏览器中打开/下载该 APK；
-2. 允许“安装未知来源应用”；
-3. 安装后打开“WebRTC 手机”；
-4. 首次会提示证书不受信任并显示 SHA-256，确认是自己的服务器后点“继续访问”；
-5. 允许摄像头和麦克风权限，注册/登录手机用户后使用。
-
-也可以用 adb：
-
-```bash
-adb install -r releases/webrtc-phone-debug.apk
-```
-
-> debug APK 使用 Android debug key 签名，适合内测/侧载，不适合上架应用商店。正式分发请生成自己的 release keystore 并签名。
-
-## 服务器地址
-
-应用内**没有地址设置**，地址写死在代码中：
+两个应用都使用同一套地址策略，只差页面路径：
 
 ```java
 PRIMARY_BASE   = "https://www.shzhihuan.cn:8443";
 FALLBACK_BASE  = "https://192.168.1.110:8443";
-PHONE_PATH     = "/phone";
+PAGE_PATH      = "/phone";  // 手机 App
+                = "/device"; // 设备 App
 ```
 
-启动时优先访问域名；如果域名不可达（当前公网 DNS/端口映射尚未完全打通），自动回退到局域网 IP。两者都不可达时显示重试页面。
+启动时优先访问域名；域名不可达时自动回退到局域网 IP；会记住上次成功的地址。应用内**没有地址设置界面**，两者都不可达时只显示“重试”。
 
 因此：
-- 手机与服务器在同一局域网：即使域名暂时不通，也能自动回退到 `192.168.1.110` 使用；
+- 手机/Pad 与服务器在同一局域网：即使域名暂时不通，也会自动回退到 `192.168.1.110`；
 - 外网使用：需要先修正域名解析和 8443 端口映射，域名可用后应用会自动优先走域名。
+
+## 共同功能
+
+- 摄像头 / 麦克风（WebView `getUserMedia` 权限桥接）
+- 自签名证书首次确认：显示 SHA-256，确认后按主机记住指纹；证书变化会再次提示
+- 手机/Pad 横竖屏旋转、通话保持屏幕常亮、加载进度、网络错误重试
+- 外部链接用系统浏览器打开
+- 设备 App 使用平板图标和“WebRTC 设备”名称，适合安装在 Pad
+
+## 安装
+
+1. 在手机/Pad 下载对应 APK；
+2. 允许“安装未知来源应用”；
+3. 打开应用，首次确认自签名证书；
+4. 使用手机号或 12 位设备号登录；
+5. 发起通话时再授权摄像头/麦克风。
+
+也可以：
+
+```bash
+adb install -r releases/webrtc-phone-debug.apk
+adb install -r releases/webrtc-device-debug.apk
+```
+
+> debug APK 使用 Android debug key 签名，适合内测/侧载，不适合上架应用商店。正式分发请生成自己的 release keystore 并签名。
 
 ## 从源码构建
 
 需要 JDK 17、Android SDK（platform 34、build-tools 34.0.0）和 Gradle 8.7。
 
 ```bash
+cd android
+echo "sdk.dir=/path/to/android-sdk" > local.properties
 export JAVA_HOME=/path/to/jdk-17
-export ANDROID_HOME=/path/to/android-sdk
-echo "sdk.dir=$ANDROID_HOME" > local.properties
-gradle assembleDebug
-# 产物：app/build/outputs/apk/debug/app-debug.apk
+
+gradle assemblePhoneDebug
+gradle assembleDeviceDebug
+
+# 产物：
+# app/build/outputs/apk/phone/debug/app-phone-debug.apk
+# app/build/outputs/apk/device/debug/app-device-debug.apk
 ```
 
-本项目不依赖 AndroidX/Material；只使用 Android framework 和 WebView。
+两个变体通过 Gradle product flavor `phone` / `device` 生成；共享同一份 `MainActivity`，只在
+`applicationId`、`app_name`、`PAGE_PATH` 和图标上不同。项目不依赖 AndroidX/Material。
+
+## 构建验证
+
+- `gradle assemblePhoneDebug assembleDeviceDebug` 成功；两个 APK 均已用 Android debug key 签名，`apksigner verify` 通过。
+- `aapt dump badging` 确认包名、启动 Activity、摄像头/麦克风/网络权限。
+- 当前构建环境没有 KVM/实体 Android 设备，未能在模拟器或真机上启动 APK；封装页面本身已用 Playwright 在手机/Pad 尺寸下做端到端验证。请在设备上重点验证：自签名证书确认、摄像头/麦克风授权、横屏通话。
+- APK SHA-256 见 [`releases/SHA256SUMS`](releases/SHA256SUMS)。
 
 ## 限制
 
 - WebView 的 WebRTC 能力依赖系统 WebView 版本；Android 8+ 一般可用。
 - 没有推送通知、后台来电、离线缓存；需要能访问服务器。
 - 自签名证书采用 TOFU（首次信任）方式，不是受信任 CA 证书。
-- 应用只是手机页面的原生外壳，账号/联系人/通话逻辑都在服务端和网页中。
-
-## 构建验证
-
-- `gradle assembleDebug` 成功；APK 已用 Android debug key 签名，`apksigner verify` 通过。
-- `aapt dump badging` 确认包名 `com.shzhihuan.webrtcphone`、启动 Activity、摄像头/麦克风/网络权限。
-- 当前构建环境没有 KVM/实体 Android 设备，未能在模拟器或真机上启动 APK；封装页面本身已用 Playwright 在手机尺寸下做端到端验证。请在手机上安装后重点验证：自签名证书确认、摄像头/麦克风授权、横屏通话。
-- APK SHA-256 见 [`releases/SHA256SUMS`](releases/SHA256SUMS)。
+- 应用只是页面的原生外壳，账号/联系人/通话逻辑都在服务端和网页中。

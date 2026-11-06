@@ -7,11 +7,28 @@ android {
     compileSdk 34
 
     defaultConfig {
-        applicationId 'com.shzhihuan.webrtcphone'
         minSdk 26
         targetSdk 34
         versionCode 1
         versionName '1.0'
+        buildConfigField "String", "PRIMARY_BASE", '"https://www.shzhihuan.cn:8443"'
+        buildConfigField "String", "FALLBACK_BASE", '"https://192.168.1.110:8443"'
+    }
+
+    flavorDimensions "role"
+    productFlavors {
+        phone {
+            dimension "role"
+            applicationId "com.shzhihuan.webrtcphone"
+            resValue "string", "app_name", "WebRTC 手机"
+            buildConfigField "String", "PAGE_PATH", '"/phone"'
+        }
+        device {
+            dimension "role"
+            applicationId "com.shzhihuan.webrtcdevice"
+            resValue "string", "app_name", "WebRTC 设备"
+            buildConfigField "String", "PAGE_PATH", '"/device"'
+        }
     }
 
     buildFeatures {
