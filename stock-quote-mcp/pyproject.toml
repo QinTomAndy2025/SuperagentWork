@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stock-quote-mcp"
+version = "0.1.0"
+description = "Zero-dependency MCP server for A-share intraday real-time quotes with multi-source failover."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "QinTomAndy2025" }]
+keywords = ["mcp", "a-share", "stock", "quote", "intraday", "tencent", "sina", "eastmoney"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+stock-quote = "stock_quote_mcp.cli:main"
+stock-quote-mcp = "stock_quote_mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"

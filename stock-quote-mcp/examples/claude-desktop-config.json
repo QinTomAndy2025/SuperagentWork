@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "stock-quote": {
+      "command": "python3",
+      "args": ["-m", "stock_quote_mcp"],
+      "env": {
+        "PYTHONPATH": "/abs/path/stock-quote-mcp/src"
+      }
+    }
+  }
+}
