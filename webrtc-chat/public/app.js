@@ -335,6 +335,20 @@ function sendSignal(to, data) {
   send({ type: 'signal', to, data });
 }
 
+async function makeOffer(peer) {
+  const pc = peer.pc;
+  if (peer.makingOffer || pc.signalingState !== 'stable') return;
+  try {
+    peer.makingOffer = true;
+    await pc.setLocalDescription();
+    sendSignal(peer.id, { description: pc.localDescription });
+  } catch (err) {
+    console.warn('[webrtc] negotiation failed', err);
+  } finally {
+    peer.makingOffer = false;
+  }
+}
+
 function createPeer({ id, name }) {
   if (state.peers.has(id)) return state.peers.get(id);
 
@@ -360,16 +374,8 @@ function createPeer({ id, name }) {
   state.peers.set(id, peer);
   updateCount();
 
-  pc.onnegotiationneeded = async () => {
-    try {
-      peer.makingOffer = true;
-      await pc.setLocalDescription();
-      sendSignal(peer.id, { description: pc.localDescription });
-    } catch (err) {
-      console.warn('[webrtc] negotiation failed', err);
-    } finally {
-      peer.makingOffer = false;
-    }
+  pc.onnegotiationneeded = () => {
+    makeOffer(peer);
   };
 
   pc.onicecandidate = ({ candidate }) => {

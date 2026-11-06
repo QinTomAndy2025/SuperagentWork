@@ -13,6 +13,10 @@
  * Usage:
  *   BASE_URL=https://192.168.1.110:8443 node scripts/e2e.js
  *   BASE_URL=https://192.168.1.110:8443 node scripts/e2e.js --relay
+ *
+ * To test a domain before public DNS is ready, map it onto the server:
+ *   HOST_RESOLVER_RULES="MAP www.shzhihuan.cn 192.168.1.110" \
+ *   BASE_URL=https://www.shzhihuan.cn:8443 node scripts/e2e.js
  */
 
 const fs = require('fs');
@@ -30,13 +34,19 @@ function log(message) {
 async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
-  const browser = await chromium.launch({
-    args: [
-      '--use-fake-ui-for-media-stream',
-      '--use-fake-device-for-media-stream',
-      '--autoplay-policy=no-user-gesture-required',
-    ],
-  });
+  const launchArgs = [
+    '--use-fake-ui-for-media-stream',
+    '--use-fake-device-for-media-stream',
+    '--autoplay-policy=no-user-gesture-required',
+    // WSL/containers often cannot resolve the mDNS host candidates Chromium
+    // hides local IPs behind; use raw host candidates for deterministic tests.
+    '--disable-features=WebRtcHideLocalIpsWithMdns',
+  ];
+  if (process.env.HOST_RESOLVER_RULES) {
+    launchArgs.push(`--host-resolver-rules=${process.env.HOST_RESOLVER_RULES}`);
+  }
+
+  const browser = await chromium.launch({ args: launchArgs });
 
   const errors = [];
   const origin = new URL(BASE_URL).origin;

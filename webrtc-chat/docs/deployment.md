@@ -7,21 +7,23 @@
 | 项目 | 值 |
 | --- | --- |
 | 地址 | `192.168.1.110` |
+| 域名 | `www.shzhihuan.cn`（端口 8443） |
 | 系统 | Ubuntu 22.04（VirtualBox 虚拟机） |
 | 运行用户 | `qinyj-vubuntu` |
 | Node.js | v22.22.0，解压到 `/opt/node`，软链到 `/usr/local/bin` |
 | 应用目录 | `/opt/webrtc-chat` |
 | 配置 | `/etc/webrtc-chat/webrtc-chat.env`（600） |
-| TLS | `/etc/webrtc-chat/tls/{cert,key}.pem`，自签名，SAN 含 IP |
+| TLS | `/etc/webrtc-chat/tls/{cert,key}.pem`，自签名，SAN 含 `www.shzhihuan.cn`、`shzhihuan.cn`、`192.168.1.110` |
 | systemd | `webrtc-chat.service` |
 
 ## 部署步骤
 
 ```bash
 # 在仓库根目录执行
-sudo TURN_URLS="turn:192.168.1.110:3478?transport=udp,turn:192.168.1.110:3478?transport=tcp" \
+sudo DOMAIN="www.shzhihuan.cn" LAN_IP="192.168.1.110" \
+     STUN_URLS="stun:{host}:3478" \
+     TURN_URLS="turn:{host}:3478?transport=udp,turn:{host}:3478?transport=tcp" \
      TURN_USER="webrtc" TURN_PASSWORD="***" \
-     LAN_IP="192.168.1.110" \
      ./webrtc-chat/deploy/install.sh
 ```
 
@@ -29,7 +31,7 @@ sudo TURN_URLS="turn:192.168.1.110:3478?transport=udp,turn:192.168.1.110:3478?tr
 
 coturn 由本机先前的部署提供，systemd 服务名 `coturn`：
 
-- `turn:192.168.1.110:3478`（UDP/TCP）
+- `turn:{host}:3478`（UDP/TCP；`/api/ice` 会把 `{host}` 替换成浏览器访问用的主机名，局域网 IP 和域名两种入口都能用）
 - `turns:192.168.1.110:5349`（TLS，自签证书；浏览器端不默认启用）
 - 长期凭据用户 `webrtc`，密码保存在 `/etc/webrtc-chat/webrtc-chat.env`
 
@@ -52,13 +54,14 @@ BASE_URL=https://192.168.1.110:8443 npm run e2e -- --relay
 | 检查项 | 结果 |
 | --- | --- |
 | `GET /healthz` | `{"ok":true,"rooms":0,"peers":0,...}` |
-| HTTPS / WSS | 正常（自签名证书，自签 SAN=`192.168.1.110`） |
+| HTTPS / WSS | 正常（自签名证书，SAN 含域名和 IP） |
 | 双端加入同一房间 | 双方 `RTCPeerConnection.connectionState = connected` |
 | 远端媒体 | 双方均收到 1 路音频 + 1 路视频，`videoWidth > 0` |
 | 双向文字聊天 | 两个方向均收到消息 |
 | 麦克风/摄像头开关 | 状态切换正常，媒体连接不中断 |
 | 强制 TURN 中继（`--relay`） | 双方选定候选均为 `relay`（TURN UDP），音视频正常 |
-| systemd | `webrtc-chat.service` active/enabled，重启后自动恢复 |
+| 仅 TCP 的 TURN 中继 | `TURN_URLS=turn:{host}:3478?transport=tcp` 时同样通过，`relayProtocol=tcp`；不需要 UDP 映射 |
+| 域名入口（`--host-resolver-rules` 映射到 192.168.1.110） | E2E 通过，`/api/ice` 返回域名版 STUN/TURN |
 | 配置权限 | `/etc/webrtc-chat/webrtc-chat.env` 为 600（root），TLS 私钥 600 |
 
 截图：
@@ -71,8 +74,17 @@ BASE_URL=https://192.168.1.110:8443 npm run e2e -- --relay
 
 ```bash
 cd webrtc-chat
-BASE_URL=https://192.168.1.110:8443 npm run e2e
-BASE_URL=https://192.168.1.110:8443 npm run e2e -- --relay
+BASE_URL=https://www.shzhihuan.cn:8443 npm run e2e
+BASE_URL=https://www.shzhihuan.cn:8443 npm run e2e -- --relay
+
+# DNS 尚未指向本机时，可临时映射域名验证服务端
+HOST_RESOLVER_RULES="MAP www.shzhihuan.cn 192.168.1.110" \
+  BASE_URL=https://www.shzhihuan.cn:8443 npm run e2e
+
+# 仅 TCP 的 TURN 中继（不需要 UDP 端口映射）
+# 先在服务器把 TURN_URLS 设为 turn:{host}:3478?transport=tcp 并重启服务
+HOST_RESOLVER_RULES="MAP www.shzhihuan.cn 192.168.1.110" \
+  BASE_URL=https://www.shzhihuan.cn:8443 npm run e2e -- --relay
 ```
 
 ## 注意事项
@@ -80,3 +92,14 @@ BASE_URL=https://192.168.1.110:8443 npm run e2e -- --relay
 - 自签名证书需要浏览器手动信任一次；换成受信任证书可消除提示。
 - 没有账号/房间密码，适合可信局域网；不要直接暴露到公网。
 - TURN 密码只存在于服务器环境文件，仓库与 PR 中不包含。
+
+
+## 域名公网访问状态
+
+服务端已按域名完成配置（证书 SAN、`{host}` 版 STUN/TURN），但公网可达性取决于 DNS 和端口映射：
+
+- `www.shzhihuan.cn` 的 A 记录当前指向的公网 IP，与本网络的实际公网出口 IP 不一致；
+- 该 A 记录地址上的 8443 端口当前拒绝连接，因此从公网访问 `https://www.shzhihuan.cn:8443` 还不能到达本服务；
+- 需要在域名 DNS 中把 A 记录改为本网络当前公网 IP，并在路由器上把 TCP 8443 转发到 `192.168.1.110`；如需 TURN 中继，至少再转发 TCP 3478（UDP 不好映射时可只用 TCP），能转发 UDP 时再加上 UDP 3478 及 `49160-49200`。
+
+在 DNS/端口映射修正前，局域网内可直接访问 `https://192.168.1.110:8443`，或通过本地 DNS/hosts 把域名指向 `192.168.1.110`。

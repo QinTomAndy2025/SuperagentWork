@@ -3,7 +3,7 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert');
 const { WebSocket } = require('ws');
-const { start } = require('../server');
+const { start, readIceServers } = require('../server');
 
 let app;
 let baseUrl;
@@ -103,6 +103,34 @@ test('serves the web client and ICE configuration', async () => {
 
   const traversal = await fetch(`${baseUrl}/..%2Fserver.js`);
   assert.equal(traversal.status, 404);
+});
+
+test('replaces {host} in ICE URLs with the request hostname', () => {
+  const env = {
+    STUN_URLS: 'stun:{host}:3478',
+    TURN_URLS: 'turn:{host}:3478?transport=udp,turn:{host}:3478?transport=tcp',
+    TURN_USER: 'webrtc',
+    TURN_PASSWORD: 'secret',
+  };
+
+  assert.deepEqual(readIceServers(env, 'www.shzhihuan.cn'), [
+    { urls: ['stun:www.shzhihuan.cn:3478'] },
+    {
+      urls: [
+        'turn:www.shzhihuan.cn:3478?transport=udp',
+        'turn:www.shzhihuan.cn:3478?transport=tcp',
+      ],
+      username: 'webrtc',
+      credential: 'secret',
+    },
+  ]);
+  assert.deepEqual(readIceServers(env, '192.168.1.110')[1].urls, [
+    'turn:192.168.1.110:3478?transport=udp',
+    'turn:192.168.1.110:3478?transport=tcp',
+  ]);
+  assert.deepEqual(readIceServers({ STUN_URLS: 'stun:example.test:3478' }), [
+    { urls: ['stun:example.test:3478'] },
+  ]);
 });
 
 test('welcomes members, broadcasts chat and relays signals', async () => {

@@ -53,14 +53,20 @@ function splitUrls(value) {
  *
  * STUN_URLS / TURN_URLS are comma separated. TURN_USER / TURN_PASSWORD are
  * shared credentials for the TURN URLs (fine for a trusted LAN demo).
+ *
+ * URLs may contain a {host} placeholder. It is replaced with the hostname the
+ * client used to load the page, so the same deployment works via a LAN IP and
+ * via a public domain without hard-coding either one.
  */
-function readIceServers(env) {
+function readIceServers(env, hostname) {
+  const withHost = (url) => (hostname ? url.split('{host}').join(hostname) : url);
+
   const servers = [];
-  const stunUrls = splitUrls(env.STUN_URLS);
+  const stunUrls = splitUrls(env.STUN_URLS).map(withHost);
   if (stunUrls.length > 0) {
     servers.push({ urls: stunUrls });
   }
-  const turnUrls = splitUrls(env.TURN_URLS);
+  const turnUrls = splitUrls(env.TURN_URLS).map(withHost);
   if (turnUrls.length > 0) {
     const server = { urls: turnUrls };
     if (env.TURN_USER) server.username = env.TURN_USER;
@@ -68,6 +74,14 @@ function readIceServers(env) {
     servers.push(server);
   }
   return servers;
+}
+
+function requestHostname(req) {
+  try {
+    return new URL(`http://${req.headers.host || 'localhost'}`).hostname;
+  } catch {
+    return 'localhost';
+  }
 }
 
 function resolvePublicFile(pathname) {
@@ -110,6 +124,7 @@ function createApp(options = {}) {
   const env = options.env || process.env;
   const log = options.log || console;
   const iceServers = options.iceServers || readIceServers(env);
+  const iceServersForHost = (hostname) => options.iceServers || readIceServers(env, hostname);
   const maxPeers = Math.max(
     1,
     Math.min(64, Number(options.maxPeers || env.MAX_PEERS || MAX_PEERS_PER_ROOM) || MAX_PEERS_PER_ROOM),
@@ -271,7 +286,7 @@ function createApp(options = {}) {
       return;
     }
     if (url.pathname === '/api/ice') {
-      writeJson(res, 200, { iceServers });
+      writeJson(res, 200, { iceServers: iceServersForHost(requestHostname(req)) });
       return;
     }
     if (url.pathname === '/healthz') {

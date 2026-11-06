@@ -7,6 +7,7 @@
 - 音视频：WebRTC 点对点传输，支持麦克风/摄像头开关
 - 局域网部署：HTTPS + 自签名证书（浏览器要求安全上下文才能访问摄像头）
 - TURN 中继：支持通过环境变量接入 coturn，跨网段/严格 NAT 时可回退中继
+- 域名/局域网双入口：ICE 地址支持 `{host}` 占位符，按浏览器访问的主机名自动下发改写后的 STUN/TURN 地址
 - 零前端框架、无外部 CDN 依赖，断网局域网也能用
 
 ## 架构
@@ -100,9 +101,10 @@ sudo systemctl status coturn
 ### 3. 安装本应用
 
 ```bash
-sudo TURN_URLS="turn:192.168.1.110:3478?transport=udp,turn:192.168.1.110:3478?transport=tcp" \
+sudo DOMAIN="www.shzhihuan.cn" LAN_IP="192.168.1.110" \
+     STUN_URLS="stun:{host}:3478" \
+     TURN_URLS="turn:{host}:3478?transport=udp,turn:{host}:3478?transport=tcp" \
      TURN_USER="webrtc" TURN_PASSWORD="CHANGE_ME" \
-     LAN_IP="192.168.1.110" \
      ./deploy/install.sh
 ```
 
@@ -110,7 +112,7 @@ sudo TURN_URLS="turn:192.168.1.110:3478?transport=udp,turn:192.168.1.110:3478?tr
 
 1. 复制应用与生产依赖到 `/opt/webrtc-chat`
 2. 写入 `/etc/webrtc-chat/webrtc-chat.env`（权限 600）
-3. 生成包含 `LAN_IP` SAN 的自签名 TLS 证书到 `/etc/webrtc-chat/tls/`
+3. 生成包含 `LAN_IP`、`DOMAIN`（以及 www 的裸域）SAN 的自签名 TLS 证书到 `/etc/webrtc-chat/tls/`
 4. 注册并启动 `webrtc-chat.service`（开机自启、失败重启）
 5. 如果 ufw 已启用，放行 8443/8080 端口
 
@@ -128,7 +130,7 @@ sudo systemctl restart webrtc-chat
 
 ## 使用
 
-1. 打开 `https://<LAN_IP>:8443`，信任自签名证书
+1. 打开 `https://www.shzhihuan.cn:8443`（局域网也可用 `https://<LAN_IP>:8443`），信任自签名证书
 2. 输入昵称和房间号，点击“进入房间”（房间号可从邀请链接自动带入）
 3. 浏览器请求摄像头/麦克风权限；允许后即可看到本地画面
 4. 另一台设备使用相同房间号进入，双方自动建立音视频连接
@@ -151,8 +153,12 @@ npm test
 # 本地
 BASE_URL=http://localhost:8443 npm run e2e
 
-# 已部署的局域网实例
-BASE_URL=https://192.168.1.110:8443 npm run e2e
+# 已部署的域名实例
+BASE_URL=https://www.shzhihuan.cn:8443 npm run e2e
+
+# 域名 DNS 尚不可用时，可临时把域名映射到服务器 IP 验证
+HOST_RESOLVER_RULES="MAP www.shzhihuan.cn 192.168.1.110" \
+  BASE_URL=https://www.shzhihuan.cn:8443 npm run e2e
 ```
 
 端到端测试会启动两个带**虚拟摄像头/麦克风**的 Chromium 页面，加入同一房间，验证：
@@ -165,10 +171,10 @@ BASE_URL=https://192.168.1.110:8443 npm run e2e
 验证 TURN 中继是否真的可用（强制 `iceTransportPolicy: relay`，只用中继候选）：
 
 ```bash
-BASE_URL=https://192.168.1.110:8443 npm run e2e -- --relay
+BASE_URL=https://www.shzhihuan.cn:8443 npm run e2e -- --relay
 ```
 
-该模式要求浏览器能访问 `TURN_URLS`；通过则说明 coturn 正常提供了 relay candidate。
+该模式要求浏览器能访问 `TURN_URLS`；通过则说明 coturn 正常提供了 relay candidate。若网络只能映射 TCP，可把 `TURN_URLS` 临时设为 `turn:{host}:3478?transport=tcp`，再跑一次该测试；此时 `relayProtocol` 应为 `tcp`。
 
 ## 配置项
 
@@ -177,8 +183,8 @@ BASE_URL=https://192.168.1.110:8443 npm run e2e -- --relay
 | `PORT` | `8443` | HTTPS 端口 |
 | `HTTP_PORT` | `8080` | HTTP 跳转端口；设为空字符串可关闭 |
 | `TLS_CERT` / `TLS_KEY` | `certs/cert.pem`、`certs/key.pem` | 证书路径；不存在时退化为 HTTP |
-| `STUN_URLS` | 空 | 逗号分隔的 STUN 地址，例如 `stun:192.168.1.110:3478` |
-| `TURN_URLS` | 空 | 逗号分隔的 TURN 地址 |
+| `STUN_URLS` | 空 | 逗号分隔的 STUN 地址，例如 `stun:{host}:3478`；`{host}` 会替换为访问页面的主机名 |
+| `TURN_URLS` | 空 | 逗号分隔的 TURN 地址，同样支持 `{host}` 占位符 |
 | `TURN_USER` / `TURN_PASSWORD` | 空 | coturn 长期凭据 |
 | `MAX_PEERS` | `8` | 单房间人数上限 |
 
@@ -203,12 +209,26 @@ BASE_URL=https://192.168.1.110:8443 npm run e2e -- --relay
 | 跨网段连不上 | 用 `npm run e2e -- --relay` 验证 TURN；检查 coturn 的 `external-ip`、防火墙和 `min-port/max-port` |
 | 页面崩溃/白屏 | 打开浏览器控制台查看错误；`journalctl -u webrtc-chat` 查看服务端日志 |
 
+## 域名与公网访问
+
+服务端本身只监听 `8443`，要让它通过域名从公网访问，需要同时满足：
+
+1. 域名的 A 记录指向**该网络当前公网出口 IP**（本机出口 IP 可用 `curl ifconfig.me` 查询）；
+2. 路由器/网关上把 **TCP 8443** 端口转发到运行本服务的机器（本部署为 `192.168.1.110`）；
+3. 如果跨网段通话需要 TURN 中继，至少转发 **TCP 3478**（`turn:...?transport=tcp`，UDP 不好映射时的可用方案）；能转发 UDP 时再转发 **UDP 3478** 以及 coturn 的中继端口段（示例配置中为 `49160-49200`）；
+4. 服务器证书的 SAN 包含该域名（`deploy/install.sh` 的 `DOMAIN` 参数会处理）。
+
+如果只在本局域网使用域名，也可以把域名的解析（路由器本地 DNS 或 hosts）指向 `192.168.1.110`，这样无需公网端口映射。
+
+> 注意：本应用没有认证。把 8443 映射到公网前，请先评估暴露风险并至少加访问控制。
+
 ## 当前部署
 
 本仓库对应的演示部署在 `192.168.1.110`（Ubuntu 22.04 虚拟机）：
 
-- 客户端：<https://192.168.1.110:8443>
+- 客户端：<https://www.shzhihuan.cn:8443>（局域网回退：<https://192.168.1.110:8443>）
 - 信令服务：`webrtc-chat.service`（systemd，开机自启）
-- TURN：`turn:192.168.1.110:3478`（复用该机已有的 coturn；凭据仅保存在服务器 `/etc/webrtc-chat/webrtc-chat.env`，不提交到仓库）
+- TURN：`turn:{host}:3478`（复用该机已有的 coturn；凭据仅保存在服务器 `/etc/webrtc-chat/webrtc-chat.env`，不提交到仓库）
+- 证书：自签名，SAN 含 `www.shzhihuan.cn`、`shzhihuan.cn`、`192.168.1.110`
 
 详见 [`docs/deployment.md`](docs/deployment.md)。

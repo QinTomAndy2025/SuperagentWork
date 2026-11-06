@@ -3,14 +3,18 @@
 # Install/update the WebRTC chat signaling server on an Ubuntu host.
 #
 # Example:
-#   sudo TURN_URLS="turn:192.168.1.110:3478?transport=udp,turn:192.168.1.110:3478?transport=tcp" \
-#        TURN_USER="webrtc" TURN_PASSWORD="change-me" LAN_IP="192.168.1.110" \
+#   sudo DOMAIN="www.shzhihuan.cn" LAN_IP="192.168.1.110" \
+#        STUN_URLS="stun:{host}:3478" \
+#        TURN_URLS="turn:{host}:3478?transport=udp,turn:{host}:3478?transport=tcp" \
+#        TURN_USER="webrtc" TURN_PASSWORD="change-me" \
 #        ./deploy/install.sh
 #
 # Optional environment variables:
 #   APP_SOURCE   source directory (defaults to the repository root)
 #   SERVICE_USER user that runs the service (defaults to $SUDO_USER)
 #   LAN_IP       IP placed in the TLS certificate SAN (defaults to first host IP)
+#   DOMAIN       optional DNS name placed in the TLS certificate SAN, e.g.
+#                www.shzhihuan.cn (the www host also adds the apex domain)
 #   PORT         HTTPS port (default 8443)
 #   HTTP_PORT    HTTP port that redirects to HTTPS (default 8080, empty disables)
 
@@ -22,6 +26,7 @@ SERVICE_NAME=${SERVICE_NAME:-webrtc-chat}
 PORT=${PORT:-8443}
 HTTP_PORT=${HTTP_PORT:-8080}
 LAN_IP=${LAN_IP:-$(hostname -I 2>/dev/null | awk '{print $1}')}
+DOMAIN=${DOMAIN:-}
 SERVICE_USER=${SERVICE_USER:-${SUDO_USER:-root}}
 APP_SOURCE=${APP_SOURCE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 
@@ -76,15 +81,31 @@ else
   echo "==> Keeping existing $ENV_FILE (edit it and restart to change settings)"
 fi
 
-if [ ! -f "$CONFIG_DIR/tls/cert.pem" ] || [ ! -f "$CONFIG_DIR/tls/key.pem" ]; then
-  echo "==> Generating self-signed TLS certificate for $LAN_IP"
+CERT_FILE="$CONFIG_DIR/tls/cert.pem"
+KEY_FILE="$CONFIG_DIR/tls/key.pem"
+NEEDS_CERT=0
+if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
+  NEEDS_CERT=1
+elif [ -n "$DOMAIN" ] && ! openssl x509 -noout -ext subjectAltName -in "$CERT_FILE" 2>/dev/null | grep -q "DNS:$DOMAIN"; then
+  NEEDS_CERT=1
+fi
+
+if [ "$NEEDS_CERT" -eq 1 ]; then
+  SAN="IP:$LAN_IP,DNS:localhost"
+  if [ -n "$DOMAIN" ]; then
+    SAN="$SAN,DNS:$DOMAIN"
+    case "$DOMAIN" in
+      www.*) SAN="$SAN,DNS:${DOMAIN#www.}" ;;
+    esac
+  fi
+  echo "==> Generating self-signed TLS certificate for ${DOMAIN:-$LAN_IP} (SAN: $SAN)"
   openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
-    -keyout "$CONFIG_DIR/tls/key.pem" \
-    -out "$CONFIG_DIR/tls/cert.pem" \
-    -subj "/CN=$LAN_IP" \
-    -addext "subjectAltName=IP:$LAN_IP,DNS:localhost" >/dev/null 2>&1
-  chown "$SERVICE_USER":"$SERVICE_USER" "$CONFIG_DIR/tls/key.pem" "$CONFIG_DIR/tls/cert.pem"
-  chmod 600 "$CONFIG_DIR/tls/key.pem"
+    -keyout "$KEY_FILE" \
+    -out "$CERT_FILE" \
+    -subj "/CN=${DOMAIN:-$LAN_IP}" \
+    -addext "subjectAltName=$SAN" >/dev/null 2>&1
+  chown "$SERVICE_USER":"$SERVICE_USER" "$KEY_FILE" "$CERT_FILE"
+  chmod 600 "$KEY_FILE"
 fi
 
 echo "==> Installing systemd unit"
