@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>WebRTC 局域网通话</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <section id="join-view" class="join-view">
+        <div class="join-card">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="6" width="13" height="12" rx="3" />
+                <path d="m16 10 4-2v8l-4-2" />
+              </svg>
+            </span>
+            <span>WebRTC 局域网通话</span>
+          </div>
+          <h1>加入房间，开始聊天与音视频通话</h1>
+          <p class="muted">
+            同一局域网内的设备打开本页，输入相同房间号即可互通。音视频点对点传输，文字消息经信令服务器转发。
+          </p>
+
+          <form id="join-form" autocomplete="off">
+            <label class="field">
+              <span>昵称</span>
+              <input id="name-input" maxlength="32" required placeholder="例如：小王" />
+            </label>
+            <label class="field">
+              <span>房间号</span>
+              <input id="room-input" maxlength="48" required placeholder="例如：webrtc-demo" />
+            </label>
+            <button id="join-btn" class="primary" type="submit">
+              <span class="btn-label">进入房间</span>
+              <span class="spinner" hidden aria-hidden="true"></span>
+            </button>
+          </form>
+          <p id="join-error" class="error" hidden></p>
+
+          <ul class="hints">
+            <li>浏览器会请求摄像头和麦克风权限；拒绝后仍可使用文字聊天。</li>
+            <li>HTTPS 使用自签名证书，首次打开需在浏览器中信任。</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="room-view" class="room-view" hidden>
+        <header class="topbar">
+          <div class="room-title">
+            <span id="conn-dot" class="conn-dot" title="连接状态"></span>
+            <h2 id="room-name">房间</h2>
+            <span id="peer-count" class="badge">1 人</span>
+          </div>
+          <div class="top-actions">
+            <button id="copy-link" class="ghost" type="button">复制邀请链接</button>
+            <button id="leave-btn" class="danger" type="button">离开</button>
+          </div>
+        </header>
+
+        <div class="room-body">
+          <main class="stage">
+            <div id="banner" class="banner" hidden></div>
+            <div id="videos" class="video-grid"></div>
+            <div class="controls">
+              <button id="mic-btn" class="control" type="button" aria-pressed="true" title="开关麦克风">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="9" y="3" width="6" height="11" rx="3" />
+                  <path d="M5 11a7 7 0 0 0 14 0" />
+                  <path d="M12 18v3" />
+                  <path class="slash" d="m4 4 16 16" />
+                </svg>
+                <span>麦克风</span>
+              </button>
+              <button id="cam-btn" class="control" type="button" aria-pressed="true" title="开关摄像头">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="6" width="13" height="12" rx="3" />
+                  <path d="m16 10 4-2v8l-4-2" />
+                  <path class="slash" d="m4 4 16 16" />
+                </svg>
+                <span>摄像头</span>
+              </button>
+              <button id="retry-media" class="control" type="button" hidden>重试音视频</button>
+            </div>
+          </main>
+
+          <aside class="chat">
+            <div class="chat-head">
+              <h3>聊天</h3>
+              <span id="chat-status" class="muted">房间消息</span>
+            </div>
+            <div id="messages" class="messages" role="log" aria-live="polite"></div>
+            <form id="chat-form" class="chat-form" autocomplete="off">
+              <input id="chat-input" maxlength="2000" placeholder="输入消息…" aria-label="消息内容" />
+              <button type="submit" class="primary">发送</button>
+            </form>
+          </aside>
+        </div>
+      </section>
+    </div>
+
+    <div id="toast" class="toast" role="status" hidden></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "webrtc-chat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LAN WebRTC text chat and audio/video calling app with a tiny signaling server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/server.test.js",
+    "e2e": "node scripts/e2e.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

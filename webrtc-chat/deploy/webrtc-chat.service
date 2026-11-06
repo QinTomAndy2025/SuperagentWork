@@ -1,0 +1,19 @@
+[Unit]
+Description=WebRTC LAN chat signaling server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# The installer replaces these paths/users for the target host.
+User=qinyj-vubuntu
+WorkingDirectory=/opt/webrtc-chat
+EnvironmentFile=/etc/webrtc-chat/webrtc-chat.env
+ExecStart=/usr/local/bin/node /opt/webrtc-chat/server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

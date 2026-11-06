@@ -1,0 +1,6 @@
+node_modules/
+certs/
+deploy/*.env
+test/artifacts/
+*.log
+.DS_Store
