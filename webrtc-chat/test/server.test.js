@@ -13,6 +13,7 @@ before(async () => {
     port: 0,
     host: '127.0.0.1',
     tls: false,
+    dbPath: ':memory:',
     env: { MAX_PEERS: '2' },
     iceServers: [{ urls: ['stun:192.168.1.110:3478'] }],
     log: { info() {}, warn() {}, error() {} },
@@ -218,4 +219,150 @@ test('ignores chat from clients that did not join', async () => {
 
   alice.close();
   anonymous.close();
+});
+
+async function apiPost(path, body, token) {
+  return fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+async function apiGet(path, token) {
+  return fetch(`${baseUrl}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+}
+
+async function registerPhoneAccount(phone, name = '手机用户') {
+  const response = await apiPost('/api/auth/register/phone', {
+    phone,
+    name,
+    password: 'secret123',
+  });
+  assert.equal(response.status, 201);
+  return response.json();
+}
+
+async function registerDeviceAccount(name = 'Pad') {
+  const response = await apiPost('/api/auth/register/device', {
+    name,
+    password: 'secret123',
+  });
+  assert.equal(response.status, 201);
+  return response.json();
+}
+
+async function makeActiveContact(device, phone) {
+  const request = await apiPost(
+    '/api/contacts/request',
+    { phone: phone.user.phone },
+    device.token,
+  );
+  assert.equal(request.status, 201);
+  const body = await request.json();
+  const confirm = await apiPost(
+    `/api/contacts/${body.contact.id}/confirm`,
+    {},
+    phone.token,
+  );
+  assert.equal(confirm.status, 200);
+  return body.contact;
+}
+
+test('auth API persists accounts and enforces contact rules', async () => {
+  const phone = await registerPhoneAccount('13600136000', '手机甲');
+  const device = await registerDeviceAccount('Pad甲');
+  assert.match(device.user.deviceNumber, /^\d{12}$/);
+
+  const me = await apiGet('/api/me', phone.token);
+  assert.equal(me.status, 200);
+  assert.equal((await me.json()).user.id, phone.user.id);
+
+  const unauthorized = await apiGet('/api/contacts');
+  assert.equal(unauthorized.status, 401);
+
+  // A phone user must add by 12-digit device number.
+  const wrong = await apiPost(
+    '/api/contacts/request',
+    { phone: '13600136000' },
+    phone.token,
+  );
+  assert.equal(wrong.status, 400);
+
+  const request = await apiPost(
+    '/api/contacts/request',
+    { phone: phone.user.phone },
+    device.token,
+  );
+  assert.equal(request.status, 201);
+  const requestBody = await request.json();
+  assert.equal(requestBody.contact.status, 'pending');
+  assert.equal(requestBody.contact.user.id, phone.user.id);
+
+  const phoneView = await (await apiGet('/api/contacts', phone.token)).json();
+  assert.equal(phoneView.incoming.length, 1);
+  assert.equal(phoneView.incoming[0].user.deviceNumber, device.user.deviceNumber);
+  assert.equal(phoneView.incoming[0].user.online, false);
+
+  const confirmed = await apiPost(
+    `/api/contacts/${requestBody.contact.id}/confirm`,
+    {},
+    phone.token,
+  );
+  assert.equal(confirmed.status, 200);
+
+  const deviceView = await (await apiGet('/api/contacts', device.token)).json();
+  assert.equal(deviceView.contacts.length, 1);
+  assert.equal(deviceView.contacts[0].user.phone, phone.user.phone);
+  assert.equal(deviceView.contacts[0].status, 'active');
+});
+
+test('authenticated websockets, presence, contact events and call invites', async () => {
+  const phone = await registerPhoneAccount('13500135000', '手机乙');
+  const device = await registerDeviceAccount('Pad乙');
+  await makeActiveContact(device, phone);
+
+  const phoneWs = createClient();
+  await phoneWs.open;
+  phoneWs.send({ type: 'auth', token: phone.token });
+  const phoneAuth = await phoneWs.waitFor((msg) => msg.type === 'auth-ok' || msg.type === 'auth-error');
+  assert.equal(phoneAuth.type, 'auth-ok');
+  assert.equal(phoneAuth.user.id, phone.user.id);
+
+  const deviceWs = createClient();
+  await deviceWs.open;
+  deviceWs.send({ type: 'auth', token: device.token });
+  const deviceAuth = await deviceWs.waitFor((msg) => msg.type === 'auth-ok' || msg.type === 'auth-error');
+  assert.equal(deviceAuth.type, 'auth-ok');
+
+  const presence = await phoneWs.waitFor(
+    (msg) => msg.type === 'presence' && msg.userId === device.user.id,
+  );
+  assert.equal(presence.online, true);
+
+  const contacts = await (await apiGet('/api/contacts', phone.token)).json();
+  assert.equal(contacts.contacts[0].user.online, true);
+
+  deviceWs.send({ type: 'call-invite', to: phone.user.id, room: 'call-websocket-test' });
+  const invite = await phoneWs.waitFor((msg) => msg.type === 'call-invite');
+  assert.equal(invite.from.id, device.user.id);
+  assert.equal(invite.room, 'call-websocket-test');
+
+  phoneWs.send({
+    type: 'call-response',
+    to: device.user.id,
+    room: 'call-websocket-test',
+    accepted: true,
+  });
+  const response = await deviceWs.waitFor((msg) => msg.type === 'call-response');
+  assert.equal(response.accepted, true);
+  assert.equal(response.from.id, phone.user.id);
+
+  phoneWs.close();
+  deviceWs.close();
 });

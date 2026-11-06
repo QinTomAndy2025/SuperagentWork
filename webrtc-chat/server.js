@@ -17,6 +17,7 @@ const http = require('http');
 const https = require('https');
 const path = require('path');
 const { WebSocketServer } = require('ws');
+const { createStore, StoreError } = require('./lib/store');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DEFAULT_PORT = 8443;
@@ -130,8 +131,14 @@ function createApp(options = {}) {
     Math.min(64, Number(options.maxPeers || env.MAX_PEERS || MAX_PEERS_PER_ROOM) || MAX_PEERS_PER_ROOM),
   );
 
+  const store = options.store || createStore({ dbPath: options.dbPath || env.DB_PATH });
+
   /** @type {Map<string, Map<string, {id: string, name: string, roomId: string, ws: import('ws').WebSocket}>>} */
   const rooms = new Map();
+  /** @type {Map<string, Set<import('ws').WebSocket>>} */
+  const presence = new Map();
+  /** @type {Map<string, {count: number, resetAt: number}>} */
+  const authAttempts = new Map();
 
   function send(ws, payload) {
     if (ws.readyState !== ws.OPEN) return;
@@ -153,13 +160,199 @@ function createApp(options = {}) {
     }
   }
 
+  function isOnline(userId) {
+    const sockets = presence.get(userId);
+    return Boolean(sockets && sockets.size > 0);
+  }
+
+  function sendToUser(userId, payload) {
+    const sockets = presence.get(userId);
+    if (!sockets) return;
+    for (const ws of sockets) send(ws, payload);
+  }
+
+  function broadcastPresence(userId, online) {
+    for (const contactId of store.getActiveContactIds(userId)) {
+      sendToUser(contactId, { type: 'presence', userId, online });
+    }
+  }
+
+  function addPresence(ws) {
+    const user = ws.user;
+    if (!user) return;
+    let sockets = presence.get(user.id);
+    if (!sockets) {
+      sockets = new Set();
+      presence.set(user.id, sockets);
+    }
+    sockets.add(ws);
+    if (sockets.size === 1) broadcastPresence(user.id, true);
+  }
+
+  function removePresence(ws) {
+    const user = ws.user;
+    if (!user) return;
+    const sockets = presence.get(user.id);
+    if (!sockets) return;
+    sockets.delete(ws);
+    if (sockets.size === 0) {
+      presence.delete(user.id);
+      broadcastPresence(user.id, false);
+    }
+  }
+
+  function decorateContacts(data) {
+    const wrap = (item) => ({
+      ...item,
+      user: { ...item.user, online: isOnline(item.user.id) },
+    });
+    return {
+      contacts: data.contacts.map(wrap),
+      incoming: data.incoming.map(wrap),
+      outgoing: data.outgoing.map(wrap),
+    };
+  }
+
+  function notifyContactUpdated(userId, otherId) {
+    sendToUser(userId, { type: 'contact-updated' });
+    sendToUser(otherId, { type: 'contact-updated' });
+  }
+
+  function bearerToken(req) {
+    const header = String(req.headers.authorization || '');
+    const match = /^Bearer\s+(.+)$/i.exec(header);
+    return match ? match[1].trim() : null;
+  }
+
+  function requireUser(req) {
+    const token = bearerToken(req);
+    const user = token ? store.getUserByToken(token) : null;
+    if (!user) throw new StoreError('unauthorized', '请先登录', 401);
+    return user;
+  }
+
+  async function readJsonBody(req) {
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of req) {
+      size += chunk.length;
+      if (size > 16 * 1024) {
+        throw new StoreError('payload-too-large', '请求体过大', 413);
+      }
+      chunks.push(chunk);
+    }
+    if (size === 0) return {};
+    let parsed;
+    try {
+      parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    } catch {
+      throw new StoreError('invalid-json', '请求格式错误');
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new StoreError('invalid-json', '请求格式错误');
+    }
+    return parsed;
+  }
+
+  function checkAuthRateLimit(req) {
+    if (authAttempts.size > 5000) authAttempts.clear();
+    const key = req.socket.remoteAddress || 'unknown';
+    const now = Date.now();
+    let entry = authAttempts.get(key);
+    if (!entry || entry.resetAt <= now) {
+      entry = { count: 0, resetAt: now + 5 * 60 * 1000 };
+      authAttempts.set(key, entry);
+    }
+    entry.count += 1;
+    if (entry.count > 40) {
+      throw new StoreError('rate-limited', '请求过于频繁，请稍后再试', 429);
+    }
+  }
+
+  function sendApiError(res, err) {
+    if (res.headersSent) return;
+    if (err instanceof StoreError) {
+      writeJson(res, err.status || 400, {
+        error: { code: err.code, message: err.message },
+      });
+      return;
+    }
+    log.error?.('api request failed:', err);
+    writeJson(res, 500, {
+      error: { code: 'internal', message: '服务器内部错误' },
+    });
+  }
+
+  function handleAuth(ws, msg) {
+    if (ws.user) return;
+    const user = store.getUserByToken(typeof msg.token === 'string' ? msg.token : '');
+    if (!user) {
+      send(ws, { type: 'auth-error', message: '登录状态已失效，请重新登录' });
+      return;
+    }
+    ws.user = user;
+    addPresence(ws);
+    send(ws, { type: 'auth-ok', user });
+  }
+
+  function handleCallInvite(ws, msg) {
+    if (!ws.user) {
+      send(ws, { type: 'call-error', code: 'unauthorized', message: '请先登录' });
+      return;
+    }
+    const to = typeof msg.to === 'string' ? msg.to : '';
+    const roomId = typeof msg.room === 'string' ? msg.room.trim().slice(0, 64) : '';
+    if (!to || !roomId) return;
+    if (!store.getActiveContact(ws.user.id, to)) {
+      send(ws, { type: 'call-error', code: 'not-contact', message: '对方不是你的联系人' });
+      return;
+    }
+    if (!isOnline(to)) {
+      send(ws, { type: 'call-error', code: 'offline', message: '对方不在线' });
+      return;
+    }
+    sendToUser(to, {
+      type: 'call-invite',
+      from: { id: ws.user.id, name: ws.user.name, role: ws.user.role },
+      room: roomId,
+    });
+  }
+
+  function handleCallResponse(ws, msg) {
+    if (!ws.user) return;
+    const to = typeof msg.to === 'string' ? msg.to : '';
+    const roomId = typeof msg.room === 'string' ? msg.room.trim().slice(0, 64) : '';
+    if (!to || !roomId) return;
+    if (!store.getActiveContact(ws.user.id, to)) return;
+    sendToUser(to, {
+      type: 'call-response',
+      from: { id: ws.user.id, name: ws.user.name, role: ws.user.role },
+      room: roomId,
+      accepted: Boolean(msg.accepted),
+    });
+  }
+
+  function handleCallCancel(ws, msg) {
+    if (!ws.user) return;
+    const to = typeof msg.to === 'string' ? msg.to : '';
+    const roomId = typeof msg.room === 'string' ? msg.room.trim().slice(0, 64) : '';
+    if (!to || !roomId) return;
+    if (!store.getActiveContact(ws.user.id, to)) return;
+    sendToUser(to, {
+      type: 'call-cancel',
+      from: { id: ws.user.id, name: ws.user.name },
+      room: roomId,
+    });
+  }
+
   function handleJoin(ws, msg) {
     if (ws.peer) {
       sendError(ws, 'already-joined', '已经在房间中');
       return;
     }
     const roomId = typeof msg.room === 'string' ? msg.room.trim().slice(0, 48) : '';
-    const name = typeof msg.name === 'string' ? msg.name.trim().slice(0, 32) : '';
+    const fallbackName = typeof msg.name === 'string' ? msg.name.trim().slice(0, 32) : '';
+    const name = ws.user ? ws.user.name : fallbackName;
     if (!roomId || !name) {
       sendError(ws, 'invalid-join', '房间号和昵称不能为空');
       return;
@@ -254,8 +447,20 @@ function createApp(options = {}) {
   function handleMessage(ws, msg) {
     if (!msg || typeof msg.type !== 'string') return;
     switch (msg.type) {
+      case 'auth':
+        handleAuth(ws, msg);
+        break;
       case 'join':
         handleJoin(ws, msg);
+        break;
+      case 'call-invite':
+        handleCallInvite(ws, msg);
+        break;
+      case 'call-response':
+        handleCallResponse(ws, msg);
+        break;
+      case 'call-cancel':
+        handleCallCancel(ws, msg);
         break;
       case 'signal':
         handleSignal(ws, msg);
@@ -271,13 +476,88 @@ function createApp(options = {}) {
     }
   }
 
-  function handleRequest(req, res) {
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      res.writeHead(405, { Allow: 'GET, HEAD' });
-      res.end('Method Not Allowed');
+  async function handleApiRequest(req, res, url) {
+    const pathName = url.pathname;
+
+    if (req.method === 'GET' && pathName === '/api/ice') {
+      writeJson(res, 200, { iceServers: iceServersForHost(requestHostname(req)) });
       return;
     }
 
+    if (req.method === 'POST' && pathName === '/api/auth/register/phone') {
+      checkAuthRateLimit(req);
+      const body = await readJsonBody(req);
+      writeJson(res, 201, store.registerPhone(body));
+      return;
+    }
+    if (req.method === 'POST' && pathName === '/api/auth/register/device') {
+      checkAuthRateLimit(req);
+      const body = await readJsonBody(req);
+      writeJson(res, 201, store.registerDevice(body));
+      return;
+    }
+    if (req.method === 'POST' && pathName === '/api/auth/login') {
+      checkAuthRateLimit(req);
+      const body = await readJsonBody(req);
+      writeJson(res, 200, store.login(body));
+      return;
+    }
+    if (req.method === 'POST' && pathName === '/api/auth/logout') {
+      store.logout(bearerToken(req));
+      writeJson(res, 200, { ok: true });
+      return;
+    }
+    if (req.method === 'GET' && pathName === '/api/me') {
+      const user = requireUser(req);
+      writeJson(res, 200, { user });
+      return;
+    }
+    if (req.method === 'GET' && pathName === '/api/contacts') {
+      const user = requireUser(req);
+      writeJson(res, 200, decorateContacts(store.listContacts(user.id)));
+      return;
+    }
+    if (req.method === 'POST' && pathName === '/api/contacts/request') {
+      const user = requireUser(req);
+      const body = await readJsonBody(req);
+      const result = store.requestContact(user.id, body);
+      if (result.contact && result.contact.status === 'pending') {
+        sendToUser(result.otherId, { type: 'contact-request', from: result.requester });
+      }
+      notifyContactUpdated(user.id, result.otherId);
+      writeJson(res, 201, {
+        contact: result.contact,
+        autoAccepted: result.autoAccepted,
+      });
+      return;
+    }
+
+    const respondMatch = /^\/api\/contacts\/([^/]+)\/(confirm|reject)$/.exec(pathName);
+    if (req.method === 'POST' && respondMatch) {
+      const user = requireUser(req);
+      const contactId = decodeURIComponent(respondMatch[1]);
+      const result =
+        respondMatch[2] === 'confirm'
+          ? store.confirmContact(user.id, contactId)
+          : store.rejectContact(user.id, contactId);
+      notifyContactUpdated(user.id, result.otherId);
+      writeJson(res, 200, { contact: result.contact });
+      return;
+    }
+
+    const deleteMatch = /^\/api\/contacts\/([^/]+)$/.exec(pathName);
+    if (req.method === 'DELETE' && deleteMatch) {
+      const user = requireUser(req);
+      const result = store.removeContact(user.id, decodeURIComponent(deleteMatch[1]));
+      notifyContactUpdated(user.id, result.otherId);
+      writeJson(res, 200, { ok: true });
+      return;
+    }
+
+    writeJson(res, 404, { error: { code: 'not-found', message: '接口不存在' } });
+  }
+
+  function handleRequest(req, res) {
     let url;
     try {
       url = new URL(req.url, 'http://localhost');
@@ -285,16 +565,32 @@ function createApp(options = {}) {
       writeText(res, 400, 'Bad Request');
       return;
     }
-    if (url.pathname === '/api/ice') {
-      writeJson(res, 200, { iceServers: iceServersForHost(requestHostname(req)) });
+
+    if (url.pathname.startsWith('/api/')) {
+      handleApiRequest(req, res, url).catch((err) => sendApiError(res, err));
       return;
     }
+
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.writeHead(405, { Allow: 'GET, HEAD' });
+      res.end('Method Not Allowed');
+      return;
+    }
+
     if (url.pathname === '/healthz') {
       const peers = [...rooms.values()].reduce((total, room) => total + room.size, 0);
+      let stats = { users: 0, contacts: 0 };
+      try {
+        stats = store.stats();
+      } catch {
+        // keep health endpoint available even if the database is closing
+      }
       writeJson(res, 200, {
         ok: true,
         rooms: rooms.size,
         peers,
+        users: stats.users,
+        contacts: stats.contacts,
         uptimeSeconds: Math.round(process.uptime()),
       });
       return;
@@ -356,6 +652,7 @@ function createApp(options = {}) {
   wss.on('connection', (ws, req) => {
     ws.isAlive = true;
     ws.peer = null;
+    ws.user = null;
     ws.remote = req.socket.remoteAddress;
 
     ws.on('pong', () => {
@@ -377,8 +674,14 @@ function createApp(options = {}) {
       }
     });
 
-    ws.on('close', () => handleLeave(ws));
-    ws.on('error', () => handleLeave(ws));
+    ws.on('close', () => {
+      handleLeave(ws);
+      removePresence(ws);
+    });
+    ws.on('error', () => {
+      handleLeave(ws);
+      removePresence(ws);
+    });
   });
 
   const heartbeat = setInterval(() => {
@@ -411,12 +714,20 @@ function createApp(options = {}) {
     }
     return new Promise((resolve) => {
       wss.close(() => {
-        server.close(() => resolve());
+        server.close(() => {
+          presence.clear();
+          try {
+            store.close();
+          } catch {
+            // already closed
+          }
+          resolve();
+        });
       });
     });
   }
 
-  return { server, wss, rooms, iceServers, secure, close };
+  return { server, wss, rooms, iceServers, secure, store, close };
 }
 
 /**

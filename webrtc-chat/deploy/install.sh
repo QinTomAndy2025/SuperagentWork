@@ -22,6 +22,7 @@ set -euo pipefail
 
 APP_DIR=${APP_DIR:-/opt/webrtc-chat}
 CONFIG_DIR=${CONFIG_DIR:-/etc/webrtc-chat}
+DATA_DIR=${DATA_DIR:-/var/lib/webrtc-chat}
 SERVICE_NAME=${SERVICE_NAME:-webrtc-chat}
 PORT=${PORT:-8443}
 HTTP_PORT=${HTTP_PORT:-8080}
@@ -41,9 +42,11 @@ if [ -z "$NODE_BIN" ] || [ -z "$NPM_BIN" ]; then
   echo "error: node/npm not found. Install Node.js 20+ first (see README.md)." >&2
   exit 1
 fi
+NODE_VERSION=$("$NODE_BIN" -p "process.versions.node")
 NODE_MAJOR=$("$NODE_BIN" -p "process.versions.node.split('.')[0]")
-if [ "$NODE_MAJOR" -lt 18 ]; then
-  echo "error: Node.js >= 18 is required, found $($NODE_BIN -v)." >&2
+NODE_MINOR=$("$NODE_BIN" -p "process.versions.node.split('.')[1]")
+if [ "$NODE_MAJOR" -lt 22 ] || { [ "$NODE_MAJOR" -eq 22 ] && [ "$NODE_MINOR" -lt 5 ]; }; then
+  echo "error: Node.js >= 22.5 is required (built-in node:sqlite), found $NODE_VERSION." >&2
   exit 1
 fi
 
@@ -53,14 +56,15 @@ if [ ! -f "$APP_SOURCE/server.js" ] || [ ! -f "$APP_SOURCE/package.json" ]; then
 fi
 
 echo "==> Installing to $APP_DIR (user: $SERVICE_USER)"
-mkdir -p "$APP_DIR" "$CONFIG_DIR/tls"
+mkdir -p "$APP_DIR" "$CONFIG_DIR/tls" "$DATA_DIR"
 cp "$APP_SOURCE/server.js" "$APP_SOURCE/package.json" "$APP_SOURCE/package-lock.json" "$APP_DIR/"
-rm -rf "$APP_DIR/public"
+rm -rf "$APP_DIR/public" "$APP_DIR/lib"
 cp -R "$APP_SOURCE/public" "$APP_DIR/public"
+cp -R "$APP_SOURCE/lib" "$APP_DIR/lib"
 
 echo "==> Installing production dependencies"
 (cd "$APP_DIR" && "$NPM_BIN" ci --omit=dev --no-audit --no-fund)
-chown -R "$SERVICE_USER":"$SERVICE_USER" "$APP_DIR"
+chown -R "$SERVICE_USER":"$SERVICE_USER" "$APP_DIR" "$DATA_DIR"
 
 ENV_FILE="$CONFIG_DIR/webrtc-chat.env"
 if [ ! -f "$ENV_FILE" ]; then
@@ -74,11 +78,15 @@ if [ ! -f "$ENV_FILE" ]; then
     if [ -n "${TURN_URLS:-}" ]; then echo "TURN_URLS=$TURN_URLS"; fi
     if [ -n "${TURN_USER:-}" ]; then echo "TURN_USER=$TURN_USER"; fi
     if [ -n "${TURN_PASSWORD:-}" ]; then echo "TURN_PASSWORD=$TURN_PASSWORD"; fi
+    echo "DB_PATH=$DATA_DIR/webrtc-chat.db"
     echo "MAX_PEERS=${MAX_PEERS:-8}"
   } > "$ENV_FILE"
   chmod 600 "$ENV_FILE"
 else
   echo "==> Keeping existing $ENV_FILE (edit it and restart to change settings)"
+  if ! grep -q '^DB_PATH=' "$ENV_FILE"; then
+    echo "DB_PATH=$DATA_DIR/webrtc-chat.db" >> "$ENV_FILE"
+  fi
 fi
 
 CERT_FILE="$CONFIG_DIR/tls/cert.pem"
