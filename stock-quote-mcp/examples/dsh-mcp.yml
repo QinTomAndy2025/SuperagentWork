@@ -1,0 +1,13 @@
+# Add this entry to ~/.dsh/profiles/<profile>/cordis.patch.yml (DSH MCP client).
+# Replace /abs/path/stock-quote-mcp with this checkout's absolute path.
+- id: mcp-stock-quote
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: stockquote
+    transport: stdio
+    command: python3
+    args: ['-m', 'stock_quote_mcp']
+    cwd: /abs/path/stock-quote-mcp
+    env:
+      PYTHONPATH: /abs/path/stock-quote-mcp/src
+    toolCallTimeoutMs: 15000

@@ -1,0 +1,752 @@
+{
+  "generated_at": "2026-11-07T07:38:07+08:00",
+  "symbols": [
+    "600519",
+    "000001",
+    "sh000300",
+    "bj899050",
+    "510300"
+  ],
+  "rounds": 40,
+  "interval_s": 0.5,
+  "sources": [
+    {
+      "source": "tencent",
+      "rounds": 40,
+      "success": 40,
+      "success_rate": 1.0,
+      "latency_ms": {
+        "p50": 82.9,
+        "p95": 89.8,
+        "max": 94.5
+      },
+      "errors": [],
+      "sample": {
+        "600519.SH": {
+          "symbol": "600519.SH",
+          "code": "600519",
+          "market": "SH",
+          "name": "贵州茅台",
+          "price": 1453.0,
+          "prev_close": 1452.0,
+          "open": 1450.0,
+          "high": 1457.72,
+          "low": 1436.0,
+          "change": 1.0,
+          "change_pct": 0.07,
+          "volume_lots": 42848.0,
+          "amount_yuan": 6199530000.0,
+          "turnover_pct": 0.34,
+          "limit_up": 1597.2,
+          "limit_down": 1306.8,
+          "bids": [
+            {
+              "price": 1452.0,
+              "volume_lots": 2.0
+            },
+            {
+              "price": 1451.6,
+              "volume_lots": 1.0
+            },
+            {
+              "price": 1451.33,
+              "volume_lots": 1.0
+            },
+            {
+              "price": 1451.01,
+              "volume_lots": 1.0
+            },
+            {
+              "price": 1451.0,
+              "volume_lots": 5.0
+            }
+          ],
+          "asks": [
+            {
+              "price": 1453.0,
+              "volume_lots": 2.0
+            },
+            {
+              "price": 1453.01,
+              "volume_lots": 2.0
+            },
+            {
+              "price": 1453.06,
+              "volume_lots": 1.0
+            },
+            {
+              "price": 1453.07,
+              "volume_lots": 8.0
+            },
+            {
+              "price": 1453.19,
+              "volume_lots": 1.0
+            }
+          ],
+          "timestamp": "2026-11-06T16:14:58+08:00",
+          "source": "tencent"
+        },
+        "000001.SZ": {
+          "symbol": "000001.SZ",
+          "code": "000001",
+          "market": "SZ",
+          "name": "平安银行",
+          "price": 11.81,
+          "prev_close": 11.64,
+          "open": 11.62,
+          "high": 11.85,
+          "low": 11.57,
+          "change": 0.17,
+          "change_pct": 1.46,
+          "volume_lots": 1640276.0,
+          "amount_yuan": 1927310000.0,
+          "turnover_pct": 0.85,
+          "limit_up": 12.8,
+          "limit_down": 10.48,
+          "bids": [
+            {
+              "price": 11.81,
+              "volume_lots": 4384.0
+            },
+            {
+              "price": 11.8,
+              "volume_lots": 3026.0
+            },
+            {
+              "price": 11.79,
+              "volume_lots": 1562.0
+            },
+            {
+              "price": 11.78,
+              "volume_lots": 1001.0
+            },
+            {
+              "price": 11.77,
+              "volume_lots": 1836.0
+            }
+          ],
+          "asks": [
+            {
+              "price": 11.82,
+              "volume_lots": 1019.0
+            },
+            {
+              "price": 11.83,
+              "volume_lots": 717.0
+            },
+            {
+              "price": 11.84,
+              "volume_lots": 3560.0
+            },
+            {
+              "price": 11.85,
+              "volume_lots": 44706.0
+            },
+            {
+              "price": 11.86,
+              "volume_lots": 16687.0
+            }
+          ],
+          "timestamp": "2026-11-06T16:15:00+08:00",
+          "source": "tencent"
+        },
+        "000300.SH": {
+          "symbol": "000300.SH",
+          "code": "000300",
+          "market": "SH",
+          "name": "沪深300",
+          "price": 4054.28,
+          "prev_close": 4113.41,
+          "open": 4017.94,
+          "high": 4069.07,
+          "low": 4013.79,
+          "change": -59.13,
+          "change_pct": -1.44,
+          "volume_lots": 192152012.0,
+          "amount_yuan": 478840400000.0,
+          "turnover_pct": 0.57,
+          "limit_up": null,
+          "limit_down": null,
+          "bids": [],
+          "asks": [],
+          "timestamp": "2026-11-06T16:14:13+08:00",
+          "source": "tencent"
+        },
+        "899050.BJ": {
+          "symbol": "899050.BJ",
+          "code": "899050",
+          "market": "BJ",
+          "name": "北证50",
+          "price": 888.48,
+          "prev_close": 910.07,
+          "open": 871.47,
+          "high": 899.76,
+          "low": 870.74,
+          "change": -21.59,
+          "change_pct": -2.37,
+          "volume_lots": 7692264.0,
+          "amount_yuan": 14000444100.0,
+          "turnover_pct": 1.55,
+          "limit_up": null,
+          "limit_down": null,
+          "bids": [],
+          "asks": [],
+          "timestamp": "2026-11-06T15:32:32+08:00",
+          "source": "tencent"
+        },
+        "510300.SH": {
+          "symbol": "510300.SH",
+          "code": "510300",
+          "market": "SH",
+          "name": "沪深300ETF华泰柏瑞",
+          "price": 4.124,
+          "prev_close": 4.195,
+          "open": 4.113,
+          "high": 4.169,
+          "low": 4.095,
+          "change": -0.071,
+          "change_pct": -1.69,
+          "volume_lots": 12629370.0,
+          "amount_yuan": 5211670000.0,
+          "turnover_pct": 2.71,
+          "limit_up": 4.615,
+          "limit_down": 3.776,
+          "bids": [
+            {
+              "price": 4.124,
+              "volume_lots": 8602.0
+            },
+            {
+              "price": 4.123,
+              "volume_lots": 11326.0
+            },
+            {
+              "price": 4.122,
+              "volume_lots": 9097.0
+            },
+            {
+              "price": 4.121,
+              "volume_lots": 6532.0
+            },
+            {
+              "price": 4.12,
+              "volume_lots": 36801.0
+            }
+          ],
+          "asks": [
+            {
+              "price": 4.125,
+              "volume_lots": 23938.0
+            },
+            {
+              "price": 4.126,
+              "volume_lots": 2775.0
+            },
+            {
+              "price": 4.127,
+              "volume_lots": 2112.0
+            },
+            {
+              "price": 4.128,
+              "volume_lots": 3305.0
+            },
+            {
+              "price": 4.129,
+              "volume_lots": 2724.0
+            }
+          ],
+          "timestamp": "2026-11-06T16:14:52+08:00",
+          "source": "tencent"
+        }
+      }
+    },
+    {
+      "source": "sina",
+      "rounds": 40,
+      "success": 40,
+      "success_rate": 1.0,
+      "latency_ms": {
+        "p50": 94.2,
+        "p95": 100.8,
+        "max": 106.6
+      },
+      "errors": [],
+      "sample": {
+        "600519.SH": {
+          "symbol": "600519.SH",
+          "code": "600519",
+          "market": "SH",
+          "name": "贵州茅台",
+          "price": 1453.0,
+          "prev_close": 1452.0,
+          "open": 1450.0,
+          "high": 1457.72,
+          "low": 1436.0,
+          "change": 1.0,
+          "change_pct": 0.0689,
+          "volume_lots": 42847.72,
+          "amount_yuan": 6199528289.0,
+          "turnover_pct": null,
+          "limit_up": null,
+          "limit_down": null,
+          "bids": [
+            {
+              "price": 1452.0,
+              "volume_lots": 2.0
+            },
+            {
+              "price": 1451.6,
+              "volume_lots": 1.0
+            },
+            {
+              "price": 1451.33,
+              "volume_lots": 1.0
+            },
+            {
+              "price": 1451.01,
+              "volume_lots": 1.0
+            },
+            {
+              "price": 1451.0,
+              "volume_lots": 5.0
+            }
+          ],
+          "asks": [
+            {
+              "price": 1453.0,
+              "volume_lots": 1.82
+            },
+            {
+              "price": 1453.01,
+              "volume_lots": 2.0
+            },
+            {
+              "price": 1453.06,
+              "volume_lots": 1.0
+            },
+            {
+              "price": 1453.07,
+              "volume_lots": 8.0
+            },
+            {
+              "price": 1453.19,
+              "volume_lots": 1.0
+            }
+          ],
+          "timestamp": "2026-11-06T15:34:59+08:00",
+          "source": "sina"
+        },
+        "000001.SZ": {
+          "symbol": "000001.SZ",
+          "code": "000001",
+          "market": "SZ",
+          "name": "平安银行",
+          "price": 11.81,
+          "prev_close": 11.64,
+          "open": 11.62,
+          "high": 11.85,
+          "low": 11.57,
+          "change": 0.17,
+          "change_pct": 1.4605,
+          "volume_lots": 1640276.39,
+          "amount_yuan": 1927307590.53,
+          "turnover_pct": null,
+          "limit_up": null,
+          "limit_down": null,
+          "bids": [
+            {
+              "price": 11.81,
+              "volume_lots": 4384.0
+            },
+            {
+              "price": 11.8,
+              "volume_lots": 3026.0
+            },
+            {
+              "price": 11.79,
+              "volume_lots": 1562.0
+            },
+            {
+              "price": 11.78,
+              "volume_lots": 1001.0
+            },
+            {
+              "price": 11.77,
+              "volume_lots": 1836.0
+            }
+          ],
+          "asks": [
+            {
+              "price": 11.82,
+              "volume_lots": 1019.0
+            },
+            {
+              "price": 11.83,
+              "volume_lots": 717.0
+            },
+            {
+              "price": 11.84,
+              "volume_lots": 3560.04
+            },
+            {
+              "price": 11.85,
+              "volume_lots": 44706.09
+            },
+            {
+              "price": 11.86,
+              "volume_lots": 16687.0
+            }
+          ],
+          "timestamp": "2026-11-06T16:30:00+08:00",
+          "source": "sina"
+        },
+        "000300.SH": {
+          "symbol": "000300.SH",
+          "code": "000300",
+          "market": "SH",
+          "name": "沪深300",
+          "price": 4054.2769,
+          "prev_close": 4113.4112,
+          "open": 4017.9403,
+          "high": 4069.0717,
+          "low": 4013.7925,
+          "change": -59.1343,
+          "change_pct": -1.4376,
+          "volume_lots": 192152012.0,
+          "amount_yuan": 478840399941.0,
+          "turnover_pct": null,
+          "limit_up": null,
+          "limit_down": null,
+          "bids": [],
+          "asks": [],
+          "timestamp": "2026-11-06T15:43:42+08:00",
+          "source": "sina"
+        },
+        "899050.BJ": {
+          "symbol": "899050.BJ",
+          "code": "899050",
+          "market": "BJ",
+          "name": "北证50",
+          "price": 888.48,
+          "prev_close": 910.07,
+          "open": 871.473,
+          "high": 899.755,
+          "low": 870.743,
+          "change": -21.59,
+          "change_pct": -2.3723,
+          "volume_lots": 769226357.0,
+          "amount_yuan": 14000444057.0,
+          "turnover_pct": null,
+          "limit_up": null,
+          "limit_down": null,
+          "bids": [],
+          "asks": [],
+          "timestamp": "2026-11-06T15:30:02+08:00",
+          "source": "sina"
+        },
+        "510300.SH": {
+          "symbol": "510300.SH",
+          "code": "510300",
+          "market": "SH",
+          "name": "沪深300ETF华泰柏瑞",
+          "price": 4.124,
+          "prev_close": 4.195,
+          "open": 4.113,
+          "high": 4.169,
+          "low": 4.095,
+          "change": -0.071,
+          "change_pct": -1.6925,
+          "volume_lots": 12629370.4,
+          "amount_yuan": 5211672667.0,
+          "turnover_pct": null,
+          "limit_up": null,
+          "limit_down": null,
+          "bids": [
+            {
+              "price": 4.124,
+              "volume_lots": 8601.75
+            },
+            {
+              "price": 4.123,
+              "volume_lots": 11326.0
+            },
+            {
+              "price": 4.122,
+              "volume_lots": 9097.0
+            },
+            {
+              "price": 4.121,
+              "volume_lots": 6532.0
+            },
+            {
+              "price": 4.12,
+              "volume_lots": 36801.0
+            }
+          ],
+          "asks": [
+            {
+              "price": 4.125,
+              "volume_lots": 23938.0
+            },
+            {
+              "price": 4.126,
+              "volume_lots": 2775.0
+            },
+            {
+              "price": 4.127,
+              "volume_lots": 2112.0
+            },
+            {
+              "price": 4.128,
+              "volume_lots": 3305.0
+            },
+            {
+              "price": 4.129,
+              "volume_lots": 2724.0
+            }
+          ],
+          "timestamp": "2026-11-06T15:34:59+08:00",
+          "source": "sina"
+        }
+      }
+    },
+    {
+      "source": "eastmoney",
+      "rounds": 40,
+      "success": 40,
+      "success_rate": 1.0,
+      "latency_ms": {
+        "p50": 29.3,
+        "p95": 34.0,
+        "max": 47.6
+      },
+      "errors": [],
+      "sample": {
+        "600519.SH": {
+          "symbol": "600519.SH",
+          "code": "600519",
+          "market": "SH",
+          "name": "贵州茅台",
+          "price": 1453.0,
+          "prev_close": 1452.0,
+          "open": 1450.0,
+          "high": 1457.72,
+          "low": 1436.0,
+          "change": 1.0,
+          "change_pct": 0.07,
+          "volume_lots": 42848.0,
+          "amount_yuan": 6199528289.0,
+          "turnover_pct": 0.34,
+          "limit_up": null,
+          "limit_down": null,
+          "bids": [],
+          "asks": [],
+          "timestamp": null,
+          "source": "eastmoney"
+        },
+        "000001.SZ": {
+          "symbol": "000001.SZ",
+          "code": "000001",
+          "market": "SZ",
+          "name": "平安银行",
+          "price": 11.81,
+          "prev_close": 11.64,
+          "open": 11.62,
+          "high": 11.85,
+          "low": 11.57,
+          "change": 0.17,
+          "change_pct": 1.46,
+          "volume_lots": 1640276.0,
+          "amount_yuan": 1927307590.53,
+          "turnover_pct": 0.85,
+          "limit_up": null,
+          "limit_down": null,
+          "bids": [],
+          "asks": [],
+          "timestamp": null,
+          "source": "eastmoney"
+        },
+        "000300.SH": {
+          "symbol": "000300.SH",
+          "code": "000300",
+          "market": "SH",
+          "name": "沪深300",
+          "price": 4054.28,
+          "prev_close": 4113.41,
+          "open": 4017.94,
+          "high": 4069.07,
+          "low": 4013.79,
+          "change": -59.13,
+          "change_pct": -1.44,
+          "volume_lots": 192152012.0,
+          "amount_yuan": 478840399941.3,
+          "turnover_pct": 0.57,
+          "limit_up": null,
+          "limit_down": null,
+          "bids": [],
+          "asks": [],
+          "timestamp": null,
+          "source": "eastmoney"
+        },
+        "899050.BJ": {
+          "symbol": "899050.BJ",
+          "code": "899050",
+          "market": "BJ",
+          "name": "北证50",
+          "price": 888.48,
+          "prev_close": 910.07,
+          "open": 871.47,
+          "high": 899.76,
+          "low": 870.74,
+          "change": -21.59,
+          "change_pct": -2.37,
+          "volume_lots": 7692264.0,
+          "amount_yuan": 14000444057.0,
+          "turnover_pct": 2.61,
+          "limit_up": null,
+          "limit_down": null,
+          "bids": [],
+          "asks": [],
+          "timestamp": null,
+          "source": "eastmoney"
+        },
+        "510300.SH": {
+          "symbol": "510300.SH",
+          "code": "510300",
+          "market": "SH",
+          "name": "沪深300ETF华泰柏瑞",
+          "price": 4.124,
+          "prev_close": 4.195,
+          "open": 4.113,
+          "high": 4.169,
+          "low": 4.095,
+          "change": -0.071,
+          "change_pct": -1.69,
+          "volume_lots": 12629370.0,
+          "amount_yuan": 5211672667.0,
+          "turnover_pct": 2.72,
+          "limit_up": null,
+          "limit_down": null,
+          "bids": [],
+          "asks": [],
+          "timestamp": null,
+          "source": "eastmoney"
+        }
+      }
+    }
+  ],
+  "price_consistency": {
+    "600519.SH": {
+      "prices": {
+        "tencent": 1453.0,
+        "sina": 1453.0,
+        "eastmoney": 1453.0
+      },
+      "max_spread_bps": 0.0
+    },
+    "000001.SZ": {
+      "prices": {
+        "tencent": 11.81,
+        "sina": 11.81,
+        "eastmoney": 11.81
+      },
+      "max_spread_bps": 0.0
+    },
+    "000300.SH": {
+      "prices": {
+        "tencent": 4054.28,
+        "sina": 4054.2769,
+        "eastmoney": 4054.28
+      },
+      "max_spread_bps": 0.01
+    },
+    "899050.BJ": {
+      "prices": {
+        "tencent": 888.48,
+        "sina": 888.48,
+        "eastmoney": 888.48
+      },
+      "max_spread_bps": 0.0
+    },
+    "510300.SH": {
+      "prices": {
+        "tencent": 4.124,
+        "sina": 4.124,
+        "eastmoney": 4.124
+      },
+      "max_spread_bps": 0.0
+    }
+  },
+  "intraday": {
+    "tencent": {
+      "ok": true,
+      "latency_ms": 115.8,
+      "date": "2026-11-06",
+      "bars": 267,
+      "first": {
+        "time": "09:30",
+        "price": 1450.0,
+        "volume_lots": 1561.0,
+        "amount_yuan": 226345000.0,
+        "avg_price": null
+      },
+      "last": {
+        "time": "15:30",
+        "price": 1453.0,
+        "volume_lots": 0.0,
+        "amount_yuan": 0.0,
+        "avg_price": null
+      },
+      "total_volume_lots": 42864.0
+    },
+    "eastmoney": {
+      "ok": true,
+      "latency_ms": 41.3,
+      "date": "2026-11-06",
+      "bars": 241,
+      "first": {
+        "time": "09:30",
+        "price": 1450.0,
+        "volume_lots": 1561.0,
+        "amount_yuan": 226345000.0,
+        "avg_price": 1450.0
+      },
+      "last": {
+        "time": "15:00",
+        "price": 1453.0,
+        "volume_lots": 2826.0,
+        "amount_yuan": 410617808.0,
+        "avg_price": 1446.875
+      },
+      "total_volume_lots": 42848.0
+    }
+  },
+  "search": {
+    "tencent": {
+      "ok": true,
+      "latency_ms": 126.7,
+      "count": 1,
+      "first": {
+        "symbol": "600519.SH",
+        "code": "600519",
+        "market": "SH",
+        "name": "贵州茅台",
+        "pinyin": "gzmt",
+        "type": "GP-A"
+      }
+    },
+    "eastmoney": {
+      "ok": true,
+      "latency_ms": 33.0,
+      "count": 1,
+      "first": {
+        "symbol": "600519.SH",
+        "code": "600519",
+        "market": "SH",
+        "name": "贵州茅台",
+        "pinyin": "GZMT",
+        "type": "沪A"
+      }
+    }
+  }
+}
