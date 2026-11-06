@@ -82,7 +82,6 @@ public class MainActivity extends Activity {
         retryButton.setOnClickListener(view -> loadServer());
 
         configureWebView();
-        requestMediaPermissions();
         loadServer();
     }
 
