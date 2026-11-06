@@ -61,6 +61,7 @@ webrtc-chat/
 ├── test/store.test.js     # SQLite 账号与联系人规则测试
 ├── test/server.test.js    # API/WebSocket/信令集成测试
 ├── scripts/e2e.js         # Playwright 双浏览器端到端测试
+├── android/               # 手机用户页面的 Android WebView App（含 debug APK）
 ├── deploy/install.sh      # Ubuntu 安装/更新（systemd + TLS + SQLite 数据目录）
 └── docs/                  # 部署记录与截图
 ```
@@ -92,6 +93,29 @@ npm start
 3. 手机用户在“添加联系人”输入设备号，发送请求；
 4. 设备用户在“待我确认”点击“确认”；
 5. 手机用户通讯录出现该设备后点击“通话”，设备接听即可看到双向画面和声音。
+
+## Android 手机 App
+
+`android/` 是把 `/phone` 页面封装成的 Android WebView 应用：
+
+- 预构建 APK：[`android/releases/webrtc-phone-debug.apk`](android/releases/webrtc-phone-debug.apk)
+- 默认连接 `https://192.168.1.110:8443/phone`，顶部“设置”可改为域名或其他服务器
+- 支持摄像头/麦克风权限、自签名证书首次确认（记住 SHA-256 指纹）、横竖屏、错误重试和屏幕常亮
+- debug 签名，适合内测/侧载；正式上架请用自己的 release keystore 重新签名
+- 已构建/签名并静态校验 APK；当前构建环境无 Android 设备/KVM，未在真机启动，安装后请验证证书确认与摄像头/麦克风授权
+
+安装：下载 APK → 允许安装未知来源 → 打开应用 → 确认自签名证书 → 授权摄像头/麦克风。
+
+从源码构建：
+
+```bash
+cd android
+echo "sdk.dir=/path/to/android-sdk" > local.properties
+JAVA_HOME=/path/to/jdk-17 gradle assembleDebug
+# app/build/outputs/apk/debug/app-debug.apk
+```
+
+详见 [`android/README.md`](android/README.md)。
 
 ## 部署到局域网 / 公网
 

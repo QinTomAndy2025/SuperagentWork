@@ -1,0 +1,8 @@
+<resources>
+    <color name="app_background">#060A14</color>
+    <color name="top_bar">#0B1220</color>
+    <color name="app_text">#E9EEFB</color>
+    <color name="app_muted">#8FA1C4</color>
+    <color name="accent">#4F8CFF</color>
+    <color name="ic_launcher_background">#4F8CFF</color>
+</resources>

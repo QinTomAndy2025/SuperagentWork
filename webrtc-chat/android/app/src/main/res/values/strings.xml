@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">WebRTC 手机</string>
+    <string name="settings">设置</string>
+    <string name="server_settings">服务器地址</string>
+    <string name="server_hint">例如 https://192.168.1.110:8443/phone</string>
+    <string name="save_and_connect">保存并连接</string>
+    <string name="cancel">取消</string>
+    <string name="retry">重试</string>
+    <string name="clear_cert">清除已信任证书</string>
+    <string name="cert_cleared">已清除证书信任</string>
+    <string name="invalid_url">请输入 https:// 开头的服务器地址</string>
+    <string name="exit_title">退出应用？</string>
+    <string name="exit_message">当前通话会结束。</string>
+    <string name="exit">退出</string>
+    <string name="error_title">无法打开页面</string>
+    <string name="error_default">请检查手机与服务器的网络连接，或修改服务器地址。</string>
+    <string name="cert_title">证书不受信任</string>
+</resources>
