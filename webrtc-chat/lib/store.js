@@ -160,6 +160,18 @@ function createStore(options = {}) {
     );
     CREATE INDEX IF NOT EXISTS idx_contacts_requester ON contacts(requester_id, status);
     CREATE INDEX IF NOT EXISTS idx_contacts_addressee ON contacts(addressee_id, status);
+
+    CREATE TABLE IF NOT EXISTS sms_codes (
+      id TEXT PRIMARY KEY,
+      phone TEXT NOT NULL,
+      purpose TEXT NOT NULL CHECK (purpose IN ('register', 'login')),
+      code_hash TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      consumed_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_sms_codes_phone ON sms_codes(phone, purpose, created_at);
   `);
 
   const stmts = {
@@ -225,6 +237,21 @@ function createStore(options = {}) {
     ),
     countUsers: db.prepare('SELECT COUNT(*) AS count FROM users'),
     countContacts: db.prepare("SELECT COUNT(*) AS count FROM contacts WHERE status = 'active'"),
+    deleteSmsCodes: db.prepare(
+      "DELETE FROM sms_codes WHERE phone = ? AND purpose = ? AND consumed_at IS NULL",
+    ),
+    insertSmsCode: db.prepare(
+      `INSERT INTO sms_codes (id, phone, purpose, code_hash, created_at, expires_at, attempts)
+       VALUES (?, ?, ?, ?, ?, ?, 0)`,
+    ),
+    activeSmsCode: db.prepare(
+      `SELECT * FROM sms_codes
+       WHERE phone = ? AND purpose = ? AND consumed_at IS NULL
+       ORDER BY created_at DESC LIMIT 1`,
+    ),
+    incrementSmsAttempts: db.prepare('UPDATE sms_codes SET attempts = attempts + 1 WHERE id = ?'),
+    consumeSmsCode: db.prepare('UPDATE sms_codes SET consumed_at = ? WHERE id = ?'),
+    deleteSmsCode: db.prepare('DELETE FROM sms_codes WHERE id = ?'),
   };
 
   function transaction(fn) {
@@ -335,6 +362,14 @@ function createStore(options = {}) {
 
   function getUserById(userId) {
     return publicUser(stmts.userById.get(userId));
+  }
+
+  function getUserByPhone(phoneInput) {
+    try {
+      return publicUser(stmts.userByPhone.get(normalizePhone(phoneInput)));
+    } catch {
+      return null;
+    }
   }
 
   function listContacts(userId) {
@@ -471,6 +506,60 @@ function createStore(options = {}) {
     return stmts.activeContact.get(pairKeyFor(userId, otherId)) || null;
   }
 
+  function createSmsCode(phoneInput, purpose, codeHash, ttlMs = 5 * 60 * 1000) {
+    const phone = normalizePhone(phoneInput);
+    if (purpose !== 'register' && purpose !== 'login') {
+      throw new StoreError('invalid-purpose', '验证码用途错误');
+    }
+    const now = Date.now();
+    const expiresAt = now + Math.max(30000, Math.min(Number(ttlMs) || 300000, 15 * 60 * 1000));
+    transaction(() => {
+      stmts.deleteSmsCodes.run(phone, purpose);
+      stmts.insertSmsCode.run(crypto.randomUUID(), phone, purpose, codeHash, now, expiresAt);
+    });
+    return { expiresAt };
+  }
+
+  function verifySmsCode(phoneInput, purpose, codeHash) {
+    const phone = normalizePhone(phoneInput);
+    const row = stmts.activeSmsCode.get(phone, purpose);
+    if (!row) return { ok: false, reason: 'not-found' };
+    if (row.expires_at <= Date.now()) {
+      stmts.deleteSmsCode.run(row.id);
+      return { ok: false, reason: 'expired' };
+    }
+    if (row.attempts >= 5) {
+      stmts.deleteSmsCode.run(row.id);
+      return { ok: false, reason: 'too-many-attempts' };
+    }
+    const expected = Buffer.from(String(row.code_hash), 'hex');
+    const actual = Buffer.from(String(codeHash), 'hex');
+    const matches =
+      expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+    if (!matches) {
+      stmts.incrementSmsAttempts.run(row.id);
+      return { ok: false, reason: 'mismatch' };
+    }
+    const now = Date.now();
+    transaction(() => {
+      stmts.consumeSmsCode.run(now, row.id);
+      stmts.deleteSmsCodes.run(phone, purpose);
+    });
+    return { ok: true };
+  }
+
+  function loginByPhone(phoneInput) {
+    const phone = normalizePhone(phoneInput);
+    const row = stmts.userByPhone.get(phone);
+    if (!row || row.role !== 'phone') return null;
+    const now = Date.now();
+    stmts.updateLogin.run(now, row.id);
+    return {
+      user: publicUser(row),
+      token: createSession(row.id, now),
+    };
+  }
+
   function stats() {
     return {
       users: stmts.countUsers.get().count,
@@ -489,11 +578,15 @@ function createStore(options = {}) {
     logout,
     getUserByToken,
     getUserById,
+    getUserByPhone,
     listContacts,
     requestContact,
     confirmContact,
     rejectContact,
     removeContact,
+    createSmsCode,
+    verifySmsCode,
+    loginByPhone,
     getActiveContactIds,
     getActiveContact,
     stats,

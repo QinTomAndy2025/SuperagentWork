@@ -35,7 +35,8 @@
           </aside>
 
           <div class="auth-card">
-            <div class="auth-tabs" role="tablist" aria-label="注册类型">
+            <p id="page-role-title" class="page-role-title" hidden></p>
+            <div id="auth-tabs" class="auth-tabs" role="tablist" aria-label="注册类型">
               <button id="tab-phone" class="auth-tab active" type="button" role="tab" aria-selected="true" data-role="phone">手机用户</button>
               <button id="tab-device" class="auth-tab" type="button" role="tab" aria-selected="false" data-role="device">设备用户</button>
             </div>
@@ -45,13 +46,33 @@
                 <button id="phone-mode-login" class="mode active" type="button">登录</button>
                 <button id="phone-mode-register" class="mode" type="button">注册</button>
               </div>
+              <div id="phone-login-mode" class="mode-switch" hidden>
+                <button id="phone-login-mode-password" class="mode active" type="button">密码登录</button>
+                <button id="phone-login-mode-sms" class="mode" type="button">验证码登录</button>
+              </div>
               <form id="phone-login-form" class="auth-form" autocomplete="on">
                 <label class="field"><span>手机号</span><input id="phone-login-phone" inputmode="numeric" maxlength="11" placeholder="11 位手机号" required /></label>
                 <label class="field"><span>密码</span><input id="phone-login-password" type="password" maxlength="128" placeholder="密码" required /></label>
                 <button class="primary" type="submit">登录</button>
               </form>
+              <form id="phone-sms-login-form" class="auth-form" hidden autocomplete="on">
+                <label class="field"><span>手机号</span><input id="phone-sms-login-phone" inputmode="numeric" maxlength="11" placeholder="11 位手机号" required /></label>
+                <label class="field"><span>短信验证码</span>
+                  <div class="code-row">
+                    <input id="phone-sms-login-code" inputmode="numeric" maxlength="6" placeholder="6 位验证码" required />
+                    <button id="phone-sms-login-send" class="ghost code-btn" type="button">获取验证码</button>
+                  </div>
+                </label>
+                <button class="primary" type="submit">验证码登录</button>
+              </form>
               <form id="phone-register-form" class="auth-form" hidden autocomplete="on">
                 <label class="field"><span>手机号</span><input id="phone-register-phone" inputmode="numeric" maxlength="11" placeholder="11 位手机号" required /></label>
+                <label id="phone-register-code-field" class="field" hidden><span>短信验证码</span>
+                  <div class="code-row">
+                    <input id="phone-register-code" inputmode="numeric" maxlength="6" placeholder="6 位验证码" />
+                    <button id="phone-register-send" class="ghost code-btn" type="button">获取验证码</button>
+                  </div>
+                </label>
                 <label class="field"><span>昵称</span><input id="phone-register-name" maxlength="32" placeholder="例如：小明" required /></label>
                 <label class="field"><span>设置密码（至少 6 位）</span><input id="phone-register-password" type="password" minlength="6" maxlength="128" placeholder="密码" required /></label>
                 <button class="primary" type="submit">注册并登录</button>
@@ -83,6 +104,7 @@
             </div>
 
             <p id="auth-error" class="error" role="alert" hidden></p>
+            <p id="page-switch" class="page-switch" hidden></p>
             <p class="auth-foot">浏览器会要求摄像头 / 麦克风权限；拒绝后仍可使用文字消息。</p>
           </div>
         </div>

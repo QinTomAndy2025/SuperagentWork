@@ -6,7 +6,8 @@
 
 ## 功能
 
-- 手机用户：手机号 + 密码注册/登录，界面适配手机横屏
+- **手机用户与设备用户使用独立页面**：`/` 选择入口，`/phone` 为手机页面，`/device` 为设备页面
+- 手机用户：手机号 + 密码注册/登录，可选短信验证码注册/登录（配置短信服务商后启用），界面适配手机横屏
 - 设备用户：设备注册后**自动激活**，服务端分配唯一 12 位设备号；界面适配 Pad 横竖屏
 - 添加联系人
   - 设备用户输入手机号添加手机用户，手机用户确认
@@ -74,14 +75,20 @@ npm install
 npm start
 ```
 
-打开 <http://localhost:8443>。本机 `localhost` 属于安全上下文，可以直接授权摄像头/麦克风；局域网其他设备必须使用 HTTPS。
+打开 <http://localhost:8443> 选择入口：
+
+- `/`：手机 / 设备入口选择页
+- `/phone`：手机用户页面（手机号 + 密码，可选短信验证码）
+- `/device`：设备用户页面（12 位设备号 + 密码）
+
+本机 `localhost` 属于安全上下文，可以直接授权摄像头/麦克风；局域网其他设备必须使用 HTTPS。
 
 数据库默认写到 `data/webrtc-chat.db`；删除该文件（以及 `-wal`/`-shm`）即可重置全部账号。
 
 用两个浏览器窗口分别注册“手机用户”和“设备用户”：
 
 1. 设备用户打开“设备用户 → 注册”，填写设备名和密码，记下分配的 12 位设备号；
-2. 手机用户打开“手机用户 → 注册”，填写手机号、昵称、密码；
+2. 手机用户打开 `/phone` → “注册”，填写手机号、昵称、密码（启用短信时还需验证码）；
 3. 手机用户在“添加联系人”输入设备号，发送请求；
 4. 设备用户在“待我确认”点击“确认”；
 5. 手机用户通讯录出现该设备后点击“通话”，设备接听即可看到双向画面和声音。
@@ -145,7 +152,7 @@ sudo DOMAIN="www.shzhihuan.cn" LAN_IP="192.168.1.110" \
 4. 生成包含 `LAN_IP`、`DOMAIN`（以及 www 裸域）SAN 的自签名证书
 5. 注册并启动 `webrtc-chat.service`（开机自启、失败重启）
 
-访问 `https://<LAN_IP>:8443` 或 `https://<域名>:8443`，首次需要信任自签名证书。
+访问 `https://<LAN_IP>:8443/` 或 `https://<域名>:8443/`，选择手机 / 设备入口，首次需要信任自签名证书。
 
 常用运维：
 
@@ -155,7 +162,32 @@ sudo journalctl -u webrtc-chat -f
 sudo systemctl restart webrtc-chat
 ```
 
-### 4. 数据库备份 / 重置
+### 4. 短信验证码（可选）
+
+手机号注册/登录支持短信验证码，但**默认关闭**；未配置短信服务商时，手机用户继续使用手机号 + 密码。
+
+生产配置示例（阿里云短信）：
+
+```bash
+SMS_ENABLED=1
+SMS_PROVIDER=aliyun
+SMS_SECRET=请改成随机长字符串
+ALIYUN_SMS_ACCESS_KEY_ID=...
+ALIYUN_SMS_ACCESS_KEY_SECRET=...
+ALIYUN_SMS_SIGN_NAME=你的短信签名
+ALIYUN_SMS_TEMPLATE_CODE=SMS_...
+```
+
+阿里云短信模板变量需为 `${code}`（6 位数字）。也可以在 `/etc/webrtc-chat/webrtc-chat.env` 中配置后重启服务。
+
+内网/联调测试模式（**不要用于生产**）：`SMS_PROVIDER=console`、`SMS_DEV_SHOW_CODE=1`。验证码会打印到服务端日志并直接显示在页面 toast 中，不需要真实短信通道。
+
+- 验证码 6 位、5 分钟有效、最多尝试 5 次、成功即作废
+- 同一手机号同一用途 60 秒内只能发送一次，每小时最多 5 次
+- 注册要求验证码（启用短信时）；登录支持“短信验证码登录”，密码登录仍保留
+- 如果没有 `SMS_SECRET`，服务端每次启动随机生成，重启后未使用的验证码失效
+
+### 5. 数据库备份 / 重置
 
 ```bash
 # 备份（建议短暂停服，确保 WAL 已合并）
@@ -169,7 +201,7 @@ sudo rm -f /var/lib/webrtc-chat/webrtc-chat.db*
 sudo systemctl start webrtc-chat
 ```
 
-### 5. 域名与公网访问
+### 6. 域名与公网访问
 
 1. 域名 A 记录指向该网络当前公网出口 IP；
 2. 路由器把 **TCP 8443** 转发到运行本服务的机器；
@@ -178,7 +210,7 @@ sudo systemctl start webrtc-chat
 
 只在本局域网使用域名时，也可以把域名解析（路由器本地 DNS 或 hosts）指向服务器内网 IP。
 
-> 本应用没有短信验证码、密码找回或管理员后台；暴露到公网前请评估风险并增加访问控制。
+> 短信验证码需要配置服务商后启用；本应用没有密码找回或管理员后台。暴露到公网前请评估风险并增加访问控制。
 
 ## 配置项
 
@@ -192,6 +224,12 @@ sudo systemctl start webrtc-chat
 | `TURN_URLS` | 空 | 逗号分隔 TURN 地址，支持 `{host}` |
 | `TURN_USER` / `TURN_PASSWORD` | 空 | coturn 长期凭据 |
 | `MAX_PEERS` | `8` | 单房间人数上限 |
+| `SMS_ENABLED` | `0` | 是否启用短信验证码 |
+| `SMS_PROVIDER` | `console` | `console`（测试）或 `aliyun` |
+| `SMS_DEV_SHOW_CODE` | `0` | console 测试模式：把验证码返回给页面 |
+| `SMS_SECRET` | 进程随机 | 验证码 HMAC 密钥；生产请固定 |
+| `SMS_TTL_SECONDS` | `300` | 验证码有效期 |
+| `ALIYUN_SMS_ACCESS_KEY_ID` 等 | 空 | 阿里云短信凭证、签名、模板 |
 
 `{host}` 会被替换成浏览器访问页面时使用的主机名：用 IP 打开就下发 IP 版 TURN，用域名打开就下发域名版 TURN。
 
@@ -199,9 +237,12 @@ sudo systemctl start webrtc-chat
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| POST | `/api/auth/register/phone` | 手机号注册 `{phone,name,password}` |
+| POST | `/api/auth/register/phone` | 手机号注册 `{phone,name,password}`；启用短信时需 `code` |
 | POST | `/api/auth/register/device` | 设备注册 `{name,password}`，返回 12 位设备号 |
+| POST | `/api/auth/sms/send` | `{phone,purpose}`，purpose=`register`/`login` |
 | POST | `/api/auth/login` | `{identifier,password}`，identifier 为手机号或设备号 |
+| POST | `/api/auth/login/sms` | `{phone,code}`，手机用户短信登录 |
+| GET | `/api/config` | 公开配置：短信是否启用 |
 | POST | `/api/auth/logout` | 注销当前 token |
 | GET | `/api/me` | 当前用户 |
 | GET | `/api/contacts` | 通讯录、待确认、已发出 |
@@ -217,7 +258,7 @@ sudo systemctl start webrtc-chat
 ## 测试
 
 ```bash
-# SQLite 账号/联系人规则 + HTTP/WebSocket 集成测试
+# SQLite 账号/联系人/短信规则 + HTTP/WebSocket 集成测试
 npm test
 
 # 双浏览器端到端：注册手机 + 注册设备 + 添加确认 + 通话 + 聊天 + 横竖屏
@@ -230,10 +271,13 @@ BASE_URL=https://192.168.1.110:8443 npm run e2e
 BASE_URL=https://192.168.1.110:8443 npm run e2e -- --relay
 ```
 
-E2E 使用虚拟摄像头/麦克风，验证：设备号格式、双向确认、双方 `RTCPeerConnection` `connected`、远端音视频轨道、双向聊天、麦克风开关、手机横屏和 Pad 竖屏无横向溢出，并输出截图到 `docs/screenshots/`。
+E2E 使用虚拟摄像头/麦克风，验证：独立 `/phone`、`/device` 页面、入口页、设备号格式、双向确认、双方 `RTCPeerConnection` `connected`、远端音视频轨道、双向聊天、麦克风开关、手机横屏和 Pad 竖屏无横向溢出，并输出截图到 `docs/screenshots/`。
 
-## 响应式布局
+短信流程由 `test/server.test.js` 的 console provider 用例覆盖（发送、注册、短信登录、错误码、未配置拒绝）。UI 测试模式截图见 `docs/screenshots/08-sms-register-test-mode.png`。
 
+## 页面与响应式布局
+
+- `/` 入口选择页；`/phone` 手机用户；`/device` 设备用户；两个页面共用同一套登录后应用界面
 - 宽屏（>900px）：通讯录侧栏 + 通话区 + 聊天侧栏（Pad 横屏、桌面）
 - 窄屏（≤900px）：通讯录变为抽屉，通话区占满；聊天在竖屏下位于下方，横屏下位于右侧
 - 已验证分辨率：1440×900、1024×768（Pad 横屏）、768×1024（Pad 竖屏）、844×390（手机横屏）、390×844（手机竖屏）
@@ -241,7 +285,8 @@ E2E 使用虚拟摄像头/麦克风，验证：设备号格式、双向确认、
 
 ## 安全与限制
 
-- **没有短信验证码**：手机号注册采用“手机号 + 密码”方式，不校验号码归属；账号安全依赖密码。
+- 短信验证码功能已实现，但默认关闭；需要阿里云等短信服务商凭证。未配置时手机号注册不校验号码归属，账号安全依赖密码。
+- 短信测试模式（console + 页面显示验证码）仅用于内网联调，不能当作真实号码验证。
 - 没有密码找回、邮箱验证、管理员后台或封禁功能；忘记密码只能由运维直接改库。
 - 密码使用 `scrypt` + 随机盐哈希；登录 token 只在数据库保存 SHA-256 摘要，有效期 30 天。
 - 联系人关系是访问控制边界；但服务端仍允许匿名 WebSocket 加入随机房间（用于兼容性/测试），通话室 ID 为随机 UUID。若需严格隔离，可在此基础上加房间成员校验。
@@ -265,7 +310,9 @@ E2E 使用虚拟摄像头/麦克风，验证：设备号格式、双向确认、
 
 演示部署在 `192.168.1.110`（Ubuntu 22.04 虚拟机）：
 
-- 客户端：<https://www.shzhihuan.cn:8443>（公网 DNS/NAT 待修正），局域网回退 <https://192.168.1.110:8443>
+- 入口：<https://www.shzhihuan.cn:8443/>（公网 DNS/NAT 待修正），局域网回退 <https://192.168.1.110:8443/>
+- 手机页面：`/phone`；设备页面：`/device`
+- 短信：当前未启用（等待短信服务商凭证）；手机用户可先用手机号 + 密码
 - 信令服务：`webrtc-chat.service`（systemd，开机自启）
 - 数据库：`/var/lib/webrtc-chat/webrtc-chat.db`
 - TURN：`turn:{host}:3478`，复用该机 coturn；凭据只保存在服务器环境文件

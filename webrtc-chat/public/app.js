@@ -9,16 +9,35 @@
 
 const $ = (selector) => document.querySelector(selector);
 const TOKEN_KEY = 'webrtc-chat.token';
+const PAGE_ROLE = (() => {
+  const path = location.pathname.replace(/\/+$/, '');
+  if (path === '/phone') return 'phone';
+  if (path === '/device') return 'device';
+  return null;
+})();
 
 const els = {
   authView: $('#auth-view'),
   appView: $('#app-view'),
+  authTabs: $('#auth-tabs'),
+  pageRoleTitle: $('#page-role-title'),
+  pageSwitch: $('#page-switch'),
   tabPhone: $('#tab-phone'),
   tabDevice: $('#tab-device'),
   phonePanel: $('#phone-panel'),
   devicePanel: $('#device-panel'),
   phoneModeLogin: $('#phone-mode-login'),
   phoneModeRegister: $('#phone-mode-register'),
+  phoneLoginMode: $('#phone-login-mode'),
+  phoneLoginModePassword: $('#phone-login-mode-password'),
+  phoneLoginModeSms: $('#phone-login-mode-sms'),
+  phoneSmsLoginForm: $('#phone-sms-login-form'),
+  phoneSmsLoginPhone: $('#phone-sms-login-phone'),
+  phoneSmsLoginCode: $('#phone-sms-login-code'),
+  phoneSmsLoginSend: $('#phone-sms-login-send'),
+  phoneRegisterCodeField: $('#phone-register-code-field'),
+  phoneRegisterCode: $('#phone-register-code'),
+  phoneRegisterSend: $('#phone-register-send'),
   phoneLoginForm: $('#phone-login-form'),
   phoneLoginPhone: $('#phone-login-phone'),
   phoneLoginPassword: $('#phone-login-password'),
@@ -103,6 +122,9 @@ const state = {
   localStream: null,
   localTile: null,
   localVideo: null,
+  smsEnabled: false,
+  smsDevShowCode: false,
+  smsLoginMode: 'password',
   iceServers: [],
   mediaError: '',
   iceLoaded: false,
@@ -192,6 +214,20 @@ async function api(path, options = {}) {
 /* Auth                                                                */
 /* ------------------------------------------------------------------ */
 
+function applyPageRole() {
+  if (!PAGE_ROLE) return;
+  els.authTabs.hidden = true;
+  els.pageRoleTitle.hidden = false;
+  els.pageRoleTitle.textContent = PAGE_ROLE === 'phone' ? '手机用户' : '设备用户';
+  els.pageSwitch.hidden = false;
+  const link = document.createElement('a');
+  link.href = PAGE_ROLE === 'phone' ? '/device' : '/phone';
+  link.textContent =
+    PAGE_ROLE === 'phone' ? '我是设备用户，前往设备页面 →' : '我是手机用户，前往手机页面 →';
+  els.pageSwitch.replaceChildren(link);
+  setAuthRole(PAGE_ROLE);
+}
+
 function setAuthRole(role) {
   const isPhone = role === 'phone';
   els.tabPhone.classList.toggle('active', isPhone);
@@ -203,6 +239,15 @@ function setAuthRole(role) {
   setAuthError('');
 }
 
+function updatePhoneLoginUI() {
+  const smsMode = state.smsEnabled && state.smsLoginMode === 'sms';
+  els.phoneLoginMode.hidden = !state.smsEnabled;
+  els.phoneLoginForm.hidden = smsMode;
+  els.phoneSmsLoginForm.hidden = !smsMode;
+  els.phoneLoginModePassword.classList.toggle('active', !smsMode);
+  els.phoneLoginModeSms.classList.toggle('active', smsMode);
+}
+
 function setAuthMode(role, mode) {
   const isLogin = mode === 'login';
   const loginBtn = role === 'phone' ? els.phoneModeLogin : els.deviceModeLogin;
@@ -211,10 +256,80 @@ function setAuthMode(role, mode) {
   const registerForm = role === 'phone' ? els.phoneRegisterForm : els.deviceRegisterForm;
   loginBtn.classList.toggle('active', isLogin);
   registerBtn.classList.toggle('active', !isLogin);
-  loginForm.hidden = !isLogin;
-  registerForm.hidden = isLogin;
-  if (role === 'device') els.deviceSuccess.hidden = true;
+  if (role === 'phone') {
+    if (isLogin) {
+      updatePhoneLoginUI();
+      els.phoneRegisterForm.hidden = true;
+    } else {
+      els.phoneLoginForm.hidden = true;
+      els.phoneSmsLoginForm.hidden = true;
+      els.phoneLoginMode.hidden = true;
+      els.phoneRegisterForm.hidden = false;
+    }
+  } else {
+    loginForm.hidden = !isLogin;
+    registerForm.hidden = isLogin;
+    els.deviceSuccess.hidden = true;
+  }
   setAuthError('');
+}
+
+function applySmsConfig(config) {
+  state.smsEnabled = Boolean(config && config.smsEnabled);
+  state.smsDevShowCode = Boolean(config && config.smsDevShowCode);
+  els.phoneRegisterCodeField.hidden = !state.smsEnabled;
+  els.phoneRegisterCode.required = state.smsEnabled;
+  if (!state.smsEnabled) state.smsLoginMode = 'password';
+  updatePhoneLoginUI();
+}
+
+async function loadConfig() {
+  try {
+    const config = await api('/api/config', { auth: false });
+    applySmsConfig(config);
+  } catch {
+    applySmsConfig({ smsEnabled: false });
+  }
+}
+
+function startCodeCountdown(button) {
+  let remaining = 60;
+  button.disabled = true;
+  button.textContent = `${remaining}s`;
+  const timer = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearInterval(timer);
+      button.disabled = false;
+      button.textContent = '获取验证码';
+    } else {
+      button.textContent = `${remaining}s`;
+    }
+  }, 1000);
+}
+
+async function requestSmsCode(phone, purpose, button) {
+  if (!/^1[3-9]\d{9}$/.test(phone)) {
+    showToast('请输入有效的 11 位手机号');
+    return;
+  }
+  button.disabled = true;
+  try {
+    const data = await api('/api/auth/sms/send', {
+      method: 'POST',
+      auth: false,
+      body: { phone, purpose },
+    });
+    startCodeCountdown(button);
+    if (data.devCode) {
+      showToast(`测试验证码：${data.devCode}`);
+    } else {
+      showToast('验证码已发送，请查看短信');
+    }
+  } catch (err) {
+    button.disabled = false;
+    showToast(err.message || '验证码发送失败');
+  }
 }
 
 function saveToken(token) {
@@ -233,7 +348,11 @@ function showAuth(message) {
   if (message) setAuthError(message);
   setAuthError(message || '');
   setTimeout(() => {
-    if (!els.phonePanel.hidden) els.phoneLoginPhone.focus({ preventScroll: true });
+    if (PAGE_ROLE === 'device') {
+      els.deviceLoginNumber.focus({ preventScroll: true });
+    } else if (!els.phonePanel.hidden) {
+      els.phoneLoginPhone.focus({ preventScroll: true });
+    }
   }, 50);
 }
 
@@ -258,6 +377,10 @@ async function completeAuth(result) {
   saveToken(result.token);
   state.user = result.user;
   state.pendingAuth = null;
+  if (PAGE_ROLE && result.user.role !== PAGE_ROLE) {
+    location.replace(`/${result.user.role}`);
+    return;
+  }
   els.authView.hidden = true;
   els.appView.hidden = false;
   updateIdentity();
@@ -297,6 +420,15 @@ async function loginWith(identifier, password) {
   await completeAuth(result);
 }
 
+async function loginWithSms(phone, code) {
+  const result = await api('/api/auth/login/sms', {
+    method: 'POST',
+    auth: false,
+    body: { phone, code },
+  });
+  await completeAuth(result);
+}
+
 async function registerPhone() {
   const result = await api('/api/auth/register/phone', {
     method: 'POST',
@@ -305,6 +437,7 @@ async function registerPhone() {
       phone: els.phoneRegisterPhone.value.trim(),
       name: els.phoneRegisterName.value.trim(),
       password: els.phoneRegisterPassword.value,
+      ...(state.smsEnabled ? { code: els.phoneRegisterCode.value.trim() } : {}),
     },
   });
   await completeAuth(result);
@@ -1328,6 +1461,27 @@ els.phoneRegisterForm.addEventListener('submit', (event) => {
   submitAuth(els.phoneRegisterForm, registerPhone);
 });
 
+els.phoneLoginModePassword.addEventListener('click', () => {
+  state.smsLoginMode = 'password';
+  updatePhoneLoginUI();
+});
+els.phoneLoginModeSms.addEventListener('click', () => {
+  state.smsLoginMode = 'sms';
+  updatePhoneLoginUI();
+});
+els.phoneSmsLoginForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  submitAuth(els.phoneSmsLoginForm, () =>
+    loginWithSms(els.phoneSmsLoginPhone.value.trim(), els.phoneSmsLoginCode.value.trim()),
+  );
+});
+els.phoneRegisterSend.addEventListener('click', () => {
+  requestSmsCode(els.phoneRegisterPhone.value.trim(), 'register', els.phoneRegisterSend);
+});
+els.phoneSmsLoginSend.addEventListener('click', () => {
+  requestSmsCode(els.phoneSmsLoginPhone.value.trim(), 'login', els.phoneSmsLoginSend);
+});
+
 els.deviceLoginForm.addEventListener('submit', (event) => {
   event.preventDefault();
   submitAuth(els.deviceLoginForm, () =>
@@ -1491,11 +1645,17 @@ function loadIceServers() {
 (async function boot() {
   const params = new URLSearchParams(location.search);
   state.forceRelay = params.get('ice') === 'relay';
+  applyPageRole();
   loadIceServers();
+  await loadConfig();
 
   if (state.token) {
     try {
       const data = await api('/api/me');
+      if (PAGE_ROLE && data.user.role !== PAGE_ROLE) {
+        location.replace(`/${data.user.role}`);
+        return;
+      }
       state.user = data.user;
       els.authView.hidden = true;
       els.appView.hidden = false;

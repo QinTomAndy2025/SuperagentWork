@@ -18,6 +18,7 @@ const https = require('https');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const { createStore, StoreError } = require('./lib/store');
+const { createSmsService, SmsError } = require('./lib/sms');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DEFAULT_PORT = 8443;
@@ -132,6 +133,7 @@ function createApp(options = {}) {
   );
 
   const store = options.store || createStore({ dbPath: options.dbPath || env.DB_PATH });
+  const sms = options.sms || createSmsService({ env, log });
 
   /** @type {Map<string, Map<string, {id: string, name: string, roomId: string, ws: import('ws').WebSocket}>>} */
   const rooms = new Map();
@@ -139,6 +141,8 @@ function createApp(options = {}) {
   const presence = new Map();
   /** @type {Map<string, {count: number, resetAt: number}>} */
   const authAttempts = new Map();
+  /** @type {Map<string, {count: number, windowStart: number, lastSent: number}>} */
+  const smsPhoneAttempts = new Map();
 
   function send(ws, payload) {
     if (ws.readyState !== ws.OPEN) return;
@@ -269,10 +273,54 @@ function createApp(options = {}) {
     }
   }
 
+  function normalizePhoneInput(value) {
+    const phone = String(value == null ? '' : value).replace(/[\s-]/g, '');
+    if (!/^1[3-9]\d{9}$/.test(phone)) {
+      throw new StoreError('invalid-phone', '请输入有效的 11 位手机号');
+    }
+    return phone;
+  }
+
+  function checkSmsSendRate(phone, purpose) {
+    if (smsPhoneAttempts.size > 5000) smsPhoneAttempts.clear();
+    const key = `${purpose}:${phone}`;
+    const now = Date.now();
+    let entry = smsPhoneAttempts.get(key);
+    if (!entry || now - entry.windowStart > 60 * 60 * 1000) {
+      entry = { count: 0, windowStart: now, lastSent: 0 };
+      smsPhoneAttempts.set(key, entry);
+    }
+    if (now - entry.lastSent < 60 * 1000) {
+      throw new StoreError('sms-too-frequent', '验证码发送过于频繁，请稍后再试', 429);
+    }
+    if (entry.count >= 5) {
+      throw new StoreError('sms-limit', '该手机号验证码发送次数过多，请稍后再试', 429);
+    }
+    entry.count += 1;
+    entry.lastSent = now;
+  }
+
+  function verifySmsCode(phone, purpose, codeInput) {
+    const code = String(codeInput == null ? '' : codeInput).trim();
+    if (!/^\d{6}$/.test(code)) {
+      throw new StoreError('invalid-code', '请输入 6 位短信验证码');
+    }
+    const result = store.verifySmsCode(phone, purpose, sms.hashCode(phone, purpose, code));
+    if (!result.ok) {
+      throw new StoreError('invalid-code', '验证码错误或已过期');
+    }
+  }
+
   function sendApiError(res, err) {
     if (res.headersSent) return;
     if (err instanceof StoreError) {
       writeJson(res, err.status || 400, {
+        error: { code: err.code, message: err.message },
+      });
+      return;
+    }
+    if (err instanceof SmsError) {
+      writeJson(res, err.status || 502, {
         error: { code: err.code, message: err.message },
       });
       return;
@@ -484,10 +532,63 @@ function createApp(options = {}) {
       return;
     }
 
+    if (req.method === 'GET' && pathName === '/api/config') {
+      writeJson(res, 200, {
+        smsEnabled: sms.enabled,
+        smsProvider: sms.provider,
+        smsDevShowCode: sms.devShowCode,
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && pathName === '/api/auth/sms/send') {
+      checkAuthRateLimit(req);
+      if (!sms.enabled) {
+        throw new StoreError('sms-disabled', '短信验证码服务未启用', 503);
+      }
+      const body = await readJsonBody(req);
+      const phone = normalizePhoneInput(body.phone);
+      const purpose = body.purpose === 'login' ? 'login' : 'register';
+      const existing = store.getUserByPhone(phone);
+      if (purpose === 'register' && existing) {
+        throw new StoreError('phone-taken', '该手机号已注册，请直接登录', 409);
+      }
+      if (purpose === 'login' && !existing) {
+        throw new StoreError('user-not-found', '该手机号未注册', 404);
+      }
+      checkSmsSendRate(phone, purpose);
+      const code = sms.generateCode();
+      store.createSmsCode(phone, purpose, sms.hashCode(phone, purpose, code), sms.ttlSeconds * 1000);
+      await sms.send(phone, code, purpose);
+      const payload = { ok: true, expiresIn: sms.ttlSeconds };
+      if (sms.devShowCode) payload.devCode = code;
+      writeJson(res, 200, payload);
+      return;
+    }
+
     if (req.method === 'POST' && pathName === '/api/auth/register/phone') {
       checkAuthRateLimit(req);
       const body = await readJsonBody(req);
+      if (sms.enabled) {
+        const phone = normalizePhoneInput(body.phone);
+        verifySmsCode(phone, 'register', body.code);
+        body.phone = phone;
+      }
       writeJson(res, 201, store.registerPhone(body));
+      return;
+    }
+
+    if (req.method === 'POST' && pathName === '/api/auth/login/sms') {
+      checkAuthRateLimit(req);
+      if (!sms.enabled) {
+        throw new StoreError('sms-disabled', '短信验证码服务未启用', 503);
+      }
+      const body = await readJsonBody(req);
+      const phone = normalizePhoneInput(body.phone);
+      verifySmsCode(phone, 'login', body.code);
+      const result = store.loginByPhone(phone);
+      if (!result) throw new StoreError('user-not-found', '该手机号未注册', 404);
+      writeJson(res, 200, result);
       return;
     }
     if (req.method === 'POST' && pathName === '/api/auth/register/device') {
@@ -596,7 +697,13 @@ function createApp(options = {}) {
       return;
     }
 
-    const file = resolvePublicFile(url.pathname);
+    const normalizedPath = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, '') : url.pathname;
+    const pageRoutes = {
+      '/': path.join(PUBLIC_DIR, 'landing.html'),
+      '/phone': path.join(PUBLIC_DIR, 'index.html'),
+      '/device': path.join(PUBLIC_DIR, 'index.html'),
+    };
+    const file = pageRoutes[normalizedPath] || resolvePublicFile(url.pathname);
     if (!file) {
       writeText(res, 404, 'Not Found');
       return;

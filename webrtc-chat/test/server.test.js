@@ -85,7 +85,15 @@ test('serves the web client and ICE configuration', async () => {
   const page = await fetch(`${baseUrl}/`);
   assert.equal(page.status, 200);
   assert.match(page.headers.get('content-type'), /text\/html/);
-  assert.match(await page.text(), /WebRTC/);
+  assert.match(await page.text(), /landing-cards/);
+
+  const phonePage = await fetch(`${baseUrl}/phone`);
+  assert.equal(phonePage.status, 200);
+  assert.match(await phonePage.text(), /id="auth-view"/);
+
+  const devicePage = await fetch(`${baseUrl}/device`);
+  assert.equal(devicePage.status, 200);
+  assert.match(await devicePage.text(), /id="device-panel"/);
 
   const ice = await fetch(`${baseUrl}/api/ice`);
   assert.equal(ice.status, 200);
@@ -365,4 +373,82 @@ test('authenticated websockets, presence, contact events and call invites', asyn
 
   phoneWs.close();
   deviceWs.close();
+});
+
+test('SMS verification registration and login with a console provider', async () => {
+  const smsApp = await start({
+    port: 0,
+    host: '127.0.0.1',
+    tls: false,
+    dbPath: ':memory:',
+    env: {
+      MAX_PEERS: '2',
+      SMS_ENABLED: '1',
+      SMS_PROVIDER: 'console',
+      SMS_DEV_SHOW_CODE: '1',
+      SMS_SECRET: 'test-secret',
+    },
+    log: { info() {}, warn() {}, error() {} },
+  });
+  const smsBase = `http://127.0.0.1:${smsApp.port}`;
+  const phone = '13300133000';
+
+  async function post(path, body) {
+    return fetch(`${smsBase}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  try {
+    const config = await (await fetch(`${smsBase}/api/config`)).json();
+    assert.equal(config.smsEnabled, true);
+    assert.equal(config.smsDevShowCode, true);
+
+    const send = await post('/api/auth/sms/send', { phone, purpose: 'register' });
+    assert.equal(send.status, 200);
+    const sendBody = await send.json();
+    assert.match(sendBody.devCode, /^\d{6}$/);
+
+    const wrong = await post('/api/auth/register/phone', {
+      phone,
+      name: '短信用户',
+      password: 'secret123',
+      code: '000000',
+    });
+    assert.equal(wrong.status, 400);
+
+    const register = await post('/api/auth/register/phone', {
+      phone,
+      name: '短信用户',
+      password: 'secret123',
+      code: sendBody.devCode,
+    });
+    assert.equal(register.status, 201);
+    const registered = await register.json();
+    assert.equal(registered.user.phone, phone);
+
+    const loginSend = await post('/api/auth/sms/send', { phone, purpose: 'login' });
+    assert.equal(loginSend.status, 200);
+    const loginCode = (await loginSend.json()).devCode;
+
+    const login = await post('/api/auth/login/sms', { phone, code: loginCode });
+    assert.equal(login.status, 200);
+    const loginBody = await login.json();
+    assert.ok(loginBody.token.length > 20);
+    const me = await fetch(`${smsBase}/api/me`, {
+      headers: { Authorization: `Bearer ${loginBody.token}` },
+    });
+    assert.equal((await me.json()).user.id, registered.user.id);
+
+    const directRegister = await post('/api/auth/register/phone', {
+      phone: '13300133001',
+      name: '无验证码',
+      password: 'secret123',
+    });
+    assert.equal(directRegister.status, 400);
+  } finally {
+    await smsApp.close();
+  }
 });

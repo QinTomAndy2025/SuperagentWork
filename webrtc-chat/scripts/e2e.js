@@ -64,10 +64,17 @@ async function main() {
   const device = await openPage('device', { width: 1024, height: 768 });
   const phoneNumber = randomPhone();
   const query = RELAY_ONLY ? '?ice=relay' : '';
+  const pageUrl = (path) => `${BASE_URL.replace(/\/$/, '')}${path}${query}`;
 
-  // Auth screenshot from the phone.
-  await phone.page.goto(`${BASE_URL}/${query}`);
+  // Landing chooser.
+  await phone.page.goto(pageUrl('/'));
+  await phone.page.waitForSelector('.landing-cards');
+  await phone.page.screenshot({ path: path.join(OUT_DIR, '00-landing.png') });
+
+  // Auth screenshot from the phone page.
+  await phone.page.goto(pageUrl('/phone'));
   await phone.page.waitForSelector('#auth-view:not([hidden])');
+  await phone.page.waitForSelector('#phone-panel:not([hidden])');
   await phone.page.screenshot({ path: path.join(OUT_DIR, '01-auth-desktop.png') });
 
   // Register the phone user.
@@ -79,10 +86,10 @@ async function main() {
   await phone.page.waitForSelector('#app-view:not([hidden])');
   log(`registered phone ${phoneNumber}`);
 
-  // Register the device user and capture the generated 12-digit number.
-  await device.page.goto(`${BASE_URL}/${query}`);
+  // Register the device user on its own page and capture the 12-digit number.
+  await device.page.goto(pageUrl('/device'));
   await device.page.waitForSelector('#auth-view:not([hidden])');
-  await device.page.click('#tab-device');
+  await device.page.waitForSelector('#device-panel:not([hidden])');
   await device.page.click('#device-mode-register');
   await device.page.fill('#device-register-name', '客厅平板');
   await device.page.fill('#device-register-password', 'secret123');
