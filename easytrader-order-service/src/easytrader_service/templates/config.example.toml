@@ -1,0 +1,80 @@
+# easytrader-order-service 示例配置
+#
+# 复制为 config.toml 后修改；推荐用 `easytrader-service init-config` 生成，
+# 它会自动填入随机 API key。
+#
+# 安全默认：paper + dry_run=true，只做模拟成交，不连接真实券商。
+# 实盘需要同时改两处：dry_run=false 且 broker.type="easytrader"。
+
+[server]
+# 默认只监听本机。若要让局域网访问，改成 0.0.0.0 并确保 API key 足够强。
+host = "127.0.0.1"
+port = 8000
+# 至少 16 个字符；也可用环境变量 ETS_API_KEY 覆盖。
+api_key = ""
+enable_docs = true
+log_level = "INFO"
+
+[database]
+# 相对路径按配置文件所在目录解析。
+path = "data/orders.db"
+
+[trading]
+dry_run = true
+
+# 单笔、单日风控上限（人民币）。max_daily_orders / max_daily_amount 为 0 表示不限制。
+max_order_amount = 10000.0
+max_daily_amount = 50000.0
+max_daily_orders = 20
+
+# A 股最小交易单位。设为 1 可关闭整手校验（例如 ETF/可转债场景需自行确认规则）。
+quantity_step = 100
+
+# 交易时段与交易日。中国节假日每年不同，请按需补充 holidays（YYYY-MM-DD）。
+enforce_trading_session = true
+sessions = [["09:30", "11:30"], ["13:00", "15:00"]]
+weekdays = [1, 2, 3, 4, 5]
+holidays = []
+
+# 是否用券商返回的资金/持仓做下单前校验。
+enforce_account_check = true
+
+# 可选涨跌停校验：需要派单方在请求里提供 prev_close（昨收价）。
+price_band_check = false
+price_band_pct = 0.10
+
+# 模拟盘是否执行 T+1（当日买入次日才可卖）。
+t_plus_one = true
+
+# 代码白名单/黑名单，留空表示不限制。代码写 6 位数字。
+allowed_symbols = []
+blocked_symbols = []
+
+[fees]
+# 佣金、最低佣金、卖出印花税、过户费。按自己的券商费率调整。
+commission_rate = 0.00025
+min_commission = 5.0
+stamp_duty_rate = 0.0005
+transfer_fee_rate = 0.00001
+
+[broker]
+# paper = 内置模拟盘；easytrader = 真实券商客户端（Windows）。
+type = "paper"
+
+[broker.paper]
+initial_cash = 100000.0
+state_path = "data/paper_account.json"
+
+[broker.easytrader]
+# 同花顺客户端用 ths；通用同花顺用 universal_client；
+# 银河 yh_client、华泰 ht_client、国金 gj_client、广发 gf_client、海通 htzq_client、miniQMT 用 miniqmt。
+broker = "ths"
+# 券商下单客户端 xiadan.exe 的完整路径；留空则使用 easytrader 默认路径。
+exe_path = ""
+# 雪球模式需要 prepare 配置文件路径。
+prepare = ""
+# miniQMT 示例：connect_kwargs = { miniqmt_path = "D:\\国金证券QMT交易端\\userdata_mini", stock_account = "你的资金账号" }
+connect_kwargs = {}
+# 市价委托类型，留空使用客户端默认；仅部分券商支持。
+market_ttype = ""
+account_id = ""
