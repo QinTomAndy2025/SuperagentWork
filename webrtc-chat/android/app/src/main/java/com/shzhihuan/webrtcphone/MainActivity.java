@@ -1,7 +1,6 @@
 package com.shzhihuan.webrtcphone;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
@@ -10,7 +9,8 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.net.http.SslError;
 import android.os.Bundle;
-import android.text.InputType;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
@@ -25,30 +25,37 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.security.MessageDigest;
 import java.security.cert.X509Certificate;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 
 /**
- * A minimal WebView shell for the phone page.
+ * WebView shell for the phone page.
  *
- * The web app provides accounts, contacts and WebRTC; this activity adds:
- *   - camera/microphone permission bridging for WebView getUserMedia
- *   - trust-on-first-use confirmation for the LAN self-signed certificate
- *   - a server URL setting and an error/retry screen
+ * The server address is fixed in the APK (no in-app URL setting):
+ *   1. https://www.shzhihuan.cn:8443/phone
+ *   2. fallback https://192.168.1.110:8443/phone
+ *
+ * The last successful base is remembered, so a LAN phone does not wait for
+ * the public domain on every launch. The WebView also bridges camera/mic
+ * permissions and confirms the self-signed certificate once per fingerprint.
  */
 public class MainActivity extends Activity {
     private static final String TAG = "WebRTCPhone";
     private static final String PREFS = "webrtc_phone";
-    private static final String KEY_URL = "server_url";
+    private static final String KEY_LAST_BASE = "last_good_base";
     private static final String KEY_TRUST_PREFIX = "trusted_cert_";
-    private static final String DEFAULT_URL = "https://192.168.1.110:8443/phone";
+    private static final String PHONE_PATH = "/phone";
+    private static final String PRIMARY_BASE = "https://www.shzhihuan.cn:8443";
+    private static final String FALLBACK_BASE = "https://192.168.1.110:8443";
     private static final int REQUEST_MEDIA_PERMISSIONS = 1001;
+    private static final int LOAD_TIMEOUT_MS = 6000;
 
     private WebView webView;
     private ProgressBar progress;
@@ -56,7 +63,15 @@ public class MainActivity extends Activity {
     private TextView errorMessage;
     private TextView serverLabel;
     private SharedPreferences prefs;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final Set<String> triedBases = new HashSet<>();
+
+    private String currentBase;
     private String currentUrl;
+    private int loadToken;
+    private boolean pageFinished;
+    private boolean pageFailed;
+    private boolean sslPending;
     private PermissionRequest pendingPermissionRequest;
 
     @Override
@@ -66,23 +81,21 @@ public class MainActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        currentUrl = prefs.getString(KEY_URL, DEFAULT_URL);
-
         webView = findViewById(R.id.web_view);
         progress = findViewById(R.id.progress);
         errorView = findViewById(R.id.error_view);
         errorMessage = findViewById(R.id.error_message);
         serverLabel = findViewById(R.id.server_label);
 
-        Button settingsButton = findViewById(R.id.settings_button);
         Button retryButton = findViewById(R.id.retry_button);
-        Button errorSettingsButton = findViewById(R.id.error_settings_button);
-        settingsButton.setOnClickListener(view -> showSettingsDialog());
-        errorSettingsButton.setOnClickListener(view -> showSettingsDialog());
-        retryButton.setOnClickListener(view -> loadServer());
+        retryButton.setOnClickListener(view -> retry());
 
         configureWebView();
-        loadServer();
+        String lastBase = prefs.getString(KEY_LAST_BASE, PRIMARY_BASE);
+        if (!PRIMARY_BASE.equals(lastBase) && !FALLBACK_BASE.equals(lastBase)) {
+            lastBase = PRIMARY_BASE;
+        }
+        startLoad(lastBase);
     }
 
     private void configureWebView() {
@@ -118,31 +131,47 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                errorView.setVisibility(View.GONE);
+                pageFinished = false;
+                pageFailed = false;
                 progress.setVisibility(View.VISIBLE);
                 progress.setProgress(0);
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
+                if (url == null || !url.startsWith(currentBase)) return;
+                pageFinished = true;
                 progress.setVisibility(View.GONE);
+                if (pageFailed) return;
+                errorView.setVisibility(View.GONE);
+                prefs.edit().putString(KEY_LAST_BASE, currentBase).apply();
                 updateServerLabel(url);
             }
 
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request == null || request.isForMainFrame()) {
-                    String description = error == null ? getString(R.string.error_default)
-                            : error.getDescription().toString();
-                    showError(description);
+                    if (request != null && request.getUrl() != null
+                            && !request.getUrl().toString().startsWith(currentBase)) {
+                        return;
+                    }
+                    pageFailed = true;
+                    pageFinished = false;
+                    progress.setVisibility(View.GONE);
+                    if (!sslPending) {
+                        tryFallbackOrError(error == null ? null : error.getDescription().toString());
+                    }
                 }
             }
 
             @SuppressWarnings("deprecation")
             @Override
             public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                if (failingUrl != null && failingUrl.equals(webView.getUrl())) {
-                    showError(description);
+                if (failingUrl != null && failingUrl.startsWith(currentBase)) {
+                    pageFailed = true;
+                    pageFinished = false;
+                    progress.setVisibility(View.GONE);
+                    if (!sslPending) tryFallbackOrError(description);
                 }
             }
 
@@ -190,7 +219,7 @@ public class MainActivity extends Activity {
             }
             return true;
         }
-        String currentHost = Uri.parse(currentUrl).getHost();
+        String currentHost = currentUrl == null ? null : Uri.parse(currentUrl).getHost();
         if (currentHost != null && currentHost.equalsIgnoreCase(uri.getHost())) {
             return false;
         }
@@ -202,10 +231,47 @@ public class MainActivity extends Activity {
         return true;
     }
 
-    private void loadServer() {
+    private void startLoad(String base) {
+        currentBase = base;
+        currentUrl = base + PHONE_PATH;
+        triedBases.add(base);
+        pageFinished = false;
+        pageFailed = false;
+        sslPending = false;
+        final int token = ++loadToken;
+
         errorView.setVisibility(View.GONE);
+        progress.setVisibility(View.VISIBLE);
+        progress.setProgress(0);
         updateServerLabel(currentUrl);
+
+        webView.stopLoading();
         webView.loadUrl(currentUrl);
+
+        mainHandler.postDelayed(() -> {
+            if (token != loadToken || pageFinished || pageFailed || sslPending) return;
+            tryFallbackOrError("连接超时");
+        }, LOAD_TIMEOUT_MS);
+    }
+
+    private void tryFallbackOrError(String reason) {
+        if (pageFinished || sslPending) return;
+        String next = PRIMARY_BASE.equals(currentBase) ? FALLBACK_BASE : PRIMARY_BASE;
+        if (!triedBases.contains(next)) {
+            Log.i(TAG, "failed " + currentBase + " (" + reason + "), trying " + next);
+            startLoad(next);
+            return;
+        }
+        showError(reason);
+    }
+
+    private void retry() {
+        triedBases.clear();
+        pageFinished = false;
+        pageFailed = false;
+        sslPending = false;
+        String base = currentBase == null ? PRIMARY_BASE : currentBase;
+        startLoad(base);
     }
 
     private void updateServerLabel(String url) {
@@ -221,20 +287,23 @@ public class MainActivity extends Activity {
 
     private void showError(String description) {
         progress.setVisibility(View.GONE);
-        errorMessage.setText(description == null || description.isEmpty()
+        String detail = description == null || description.isEmpty()
                 ? getString(R.string.error_default)
-                : description + "\n\n" + getString(R.string.error_default));
+                : description + "\n\n" + getString(R.string.error_default);
+        errorMessage.setText(detail);
         errorView.setVisibility(View.VISIBLE);
         errorView.bringToFront();
     }
 
     private void handleSslError(SslErrorHandler handler, SslError error) {
+        sslPending = true;
         String host = Uri.parse(error.getUrl() != null ? error.getUrl() : currentUrl).getHost();
         String fingerprint = certificateFingerprint(error);
         String key = KEY_TRUST_PREFIX + host;
         String trusted = prefs.getString(key, null);
 
         if (fingerprint != null && fingerprint.equals(trusted)) {
+            sslPending = false;
             handler.proceed();
             return;
         }
@@ -247,12 +316,18 @@ public class MainActivity extends Activity {
                 .setMessage(message)
                 .setCancelable(false)
                 .setPositiveButton("继续访问", (dialog, which) -> {
+                    sslPending = false;
                     if (fingerprint != null && host != null) {
                         prefs.edit().putString(key, fingerprint).apply();
                     }
                     handler.proceed();
                 })
-                .setNegativeButton(R.string.cancel, (dialog, which) -> handler.cancel())
+                .setNegativeButton(R.string.cancel, (dialog, which) -> {
+                    sslPending = false;
+                    pageFailed = true;
+                    handler.cancel();
+                    showError("证书未被信任");
+                })
                 .show();
     }
 
@@ -313,44 +388,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void showSettingsDialog() {
-        final EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        input.setText(currentUrl);
-        input.setSelectAllOnFocus(true);
-
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.server_settings)
-                .setMessage(getString(R.string.server_hint)
-                        + "\n\n默认地址：" + DEFAULT_URL)
-                .setView(input)
-                .setPositiveButton(R.string.save_and_connect, (dialog, which) -> {
-                    String url = input.getText().toString().trim();
-                    if (!url.startsWith("https://")) {
-                        Toast.makeText(this, R.string.invalid_url, Toast.LENGTH_LONG).show();
-                        return;
-                    }
-                    Uri uri = Uri.parse(url);
-                    if (uri.getHost() == null) {
-                        Toast.makeText(this, R.string.invalid_url, Toast.LENGTH_LONG).show();
-                        return;
-                    }
-                    currentUrl = url;
-                    prefs.edit().putString(KEY_URL, url).apply();
-                    loadServer();
-                })
-                .setNeutralButton(R.string.clear_cert, (dialog, which) -> {
-                    SharedPreferences.Editor editor = prefs.edit();
-                    for (String key : prefs.getAll().keySet()) {
-                        if (key.startsWith(KEY_TRUST_PREFIX)) editor.remove(key);
-                    }
-                    editor.apply();
-                    Toast.makeText(this, R.string.cert_cleared, Toast.LENGTH_SHORT).show();
-                })
-                .setNegativeButton(R.string.cancel, null)
-                .show();
-    }
-
     @Override
     public void onBackPressed() {
         if (webView != null && webView.canGoBack()) {
@@ -367,6 +404,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null);
         if (webView != null) {
             webView.loadUrl("about:blank");
             webView.destroy();

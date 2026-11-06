@@ -99,7 +99,7 @@ npm start
 `android/` 是把 `/phone` 页面封装成的 Android WebView 应用：
 
 - 预构建 APK：[`android/releases/webrtc-phone-debug.apk`](android/releases/webrtc-phone-debug.apk)
-- 默认连接 `https://192.168.1.110:8443/phone`，顶部“设置”可改为域名或其他服务器
+- 地址写死、无手动设置：优先 `https://www.shzhihuan.cn:8443/phone`，失败自动回退 `https://192.168.1.110:8443/phone`
 - 支持摄像头/麦克风权限、自签名证书首次确认（记住 SHA-256 指纹）、横竖屏、错误重试和屏幕常亮
 - debug 签名，适合内测/侧载；正式上架请用自己的 release keystore 重新签名
 - 已构建/签名并静态校验 APK；当前构建环境无 Android 设备/KVM，未在真机启动，安装后请验证证书确认与摄像头/麦克风授权
