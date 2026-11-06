@@ -8,7 +8,7 @@ import threading
 from pathlib import Path
 from typing import Any, Iterable
 
-from .models import Order
+from .models import COUNTED_STATUSES, Order
 from .timeutil import iso_now
 
 _SCHEMA = """
@@ -217,15 +217,7 @@ class OrderStore:
             return cursor.rowcount == 1
 
     def daily_stats(self, trading_date: str) -> dict[str, float | int]:
-        counted = [
-            "accepted",
-            "submitting",
-            "submitted",
-            "partially_filled",
-            "filled",
-            "cancel_pending",
-            "unknown",
-        ]
+        counted = [status.value for status in COUNTED_STATUSES]
         placeholders = ",".join("?" for _ in counted)
         with self._lock:
             row = self._conn.execute(

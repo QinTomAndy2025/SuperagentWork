@@ -18,10 +18,11 @@ from .broker import build_broker
 from .broker.paper import PaperBroker
 from .config import config_template_text, load_config
 from .errors import BrokerError, ConfigError
+from .models import TERMINAL_STATUSES
 from .trading_calendar import TradingCalendar
 from .timeutil import now_china
 
-_TERMINAL = {"filled", "canceled", "rejected", "failed", "unknown"}
+_TERMINAL = {status.value for status in TERMINAL_STATUSES}
 
 
 class CliError(Exception):
