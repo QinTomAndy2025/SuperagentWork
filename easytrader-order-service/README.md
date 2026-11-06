@@ -216,6 +216,10 @@ easytrader 通过 Windows GUI 自动化驱动券商客户端，因此：
    pip install -e ".[live]"
    ```
 
+   > easytrader 0.23.7 固定依赖较老的 `pywinauto==0.6.6`（官方 classifier 只到 Python 3.7）。
+   > 如果客户端连接在新版 Python 上出现兼容错误，请用 Python 3.10/3.11 单独建 venv；
+   > 本项目没有改动这个上游依赖。
+
 3. 修改 `config.toml`：
 
    ```toml
