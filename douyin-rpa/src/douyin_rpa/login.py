@@ -58,26 +58,18 @@ def is_logged_in(page: Page) -> bool:
         return False
 
 
-def _verify_by_upload_page(
-    page: Page, *, base_url: str | None = None, timeout_s: float = 15
-) -> bool:
-    """在扫码后的新页面里打开上传页，用文件控件确认登录真的生效。"""
+def _verify_by_upload_page(page: Page, *, base_url: str | None = None) -> bool:
+    """在扫码后的新页面里打开上传页，用文件控件确认登录真的生效。
+
+    只做一次短检查：这个函数在主等待循环里调用，不能长时间阻塞二维码刷新。
+    """
 
     probe = None
     try:
         probe = page.context.new_page()
-        browser.goto(probe, config.upload_url(base_url))
-        deadline = time.monotonic() + timeout_s
-        while time.monotonic() < deadline:
-            if is_logged_in(probe):
-                return True
-            try:
-                if sel.has_visible_spec(probe, config.DEFAULT_SELECTORS["login_marker"], timeout=0):
-                    return False
-            except Exception:
-                pass
-            probe.wait_for_timeout(500)
-        return False
+        browser.goto(probe, config.upload_url(base_url), timeout_ms=10_000)
+        probe.wait_for_timeout(1200)
+        return is_logged_in(probe)
     except Exception:
         return False
     finally:
@@ -187,7 +179,7 @@ def wait_for_login(
         page.wait_for_timeout(poll_ms)
         if is_logged_in(page):
             return LoginResult(already_logged_in=False, qr_path=qr_path, page_url=page.url)
-        if "/creator-micro" in (page.url or "").lower() and time.monotonic() - last_verify > 10:
+        if "/creator-micro" in (page.url or "").lower() and time.monotonic() - last_verify > 20:
             last_verify = time.monotonic()
             if _verify_by_upload_page(page, base_url=base_url):
                 return LoginResult(already_logged_in=False, qr_path=qr_path, page_url=page.url)
