@@ -52,6 +52,16 @@ async function main() {
   async function openPage(label, viewport) {
     const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport });
     await context.grantPermissions(['camera', 'microphone'], { origin });
+    await context.addInitScript(() => {
+      window.__gumCalls = 0;
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        navigator.mediaDevices.getUserMedia = (...args) => {
+          window.__gumCalls += 1;
+          return original(...args);
+        };
+      }
+    });
     const page = await context.newPage();
     page.on('pageerror', (error) => errors.push(`${label} pageerror: ${error.message}`));
     page.on('console', (message) => {
@@ -120,11 +130,20 @@ async function main() {
   );
   await phone.page.waitForSelector('#contacts-list .online-dot.online');
 
-  // Phone starts the call; device accepts.
   await device.page.screenshot({ path: path.join(OUT_DIR, '03-contacts-tablet.png') });
-  await phone.page.click('#contacts-list .contact-call');
+  await phone.page.waitForSelector('#toast', { state: 'hidden' }).catch(() => {});
+  await phone.page.click('#settings-btn');
+  await phone.page.waitForSelector('#settings-panel:not([hidden])');
+  await phone.page.screenshot({ path: path.join(OUT_DIR, '03a-settings.png') });
+  await phone.page.click('#settings-close');
+
+  // Phone starts the call; device accepts.
+  await phone.page.click('#contacts-list .contact-card');
+  await phone.page.waitForSelector('#call-overlay:not([hidden])');
   await phone.page.waitForSelector('#room-view:not([hidden])');
-  await device.page.waitForSelector('#incoming-call:not([hidden])');
+  await device.page.waitForSelector('#incoming-panel:not([hidden])');
+  await device.page.waitForSelector('#toast', { state: 'hidden' }).catch(() => {});
+  await device.page.screenshot({ path: path.join(OUT_DIR, '03b-incoming-call.png') });
   await device.page.click('#accept-call');
   await device.page.waitForSelector('#room-view:not([hidden])');
 
@@ -167,6 +186,9 @@ async function main() {
   ]);
   log('both peers connected with audio + video');
 
+  await phone.page.click('#chat-toggle');
+  await phone.page.waitForSelector('#chat-panel.open');
+  await phone.page.waitForTimeout(400);
   const chatText = `你好，设备 ${Date.now()}`;
   await phone.page.fill('#chat-input', chatText);
   await phone.page.press('#chat-input', 'Enter');
@@ -175,8 +197,16 @@ async function main() {
     chatText,
     { timeout: 10000 },
   );
+  await phone.page.waitForFunction(
+    (text) => [...document.querySelectorAll('.bubble')].some((el) => el.textContent === text),
+    chatText,
+    { timeout: 10000 },
+  );
+
+  await phone.page.screenshot({ path: path.join(OUT_DIR, '04a-call-chat.png') });
 
   // Let transient toasts fade before capturing the call screenshots.
+  await phone.page.click('#chat-close');
   await phone.page.waitForTimeout(3000);
 
   // Microphone / camera toggles must not drop the media connection.
@@ -188,7 +218,17 @@ async function main() {
   await phone.page.screenshot({ path: path.join(OUT_DIR, '04-call-phone.png') });
   await device.page.screenshot({ path: path.join(OUT_DIR, '05-call-device-tablet-landscape.png') });
 
-  // Responsive evidence: phone landscape and pad portrait.
+  // Responsive evidence: phone portrait, phone landscape and pad portrait.
+  await phone.page.setViewportSize({ width: 390, height: 844 });
+  await phone.page.waitForTimeout(300);
+  await phone.page.screenshot({ path: path.join(OUT_DIR, '06a-call-phone-portrait.png') });
+  const phonePortraitOverflow = await phone.page.evaluate(() => ({
+    width: document.documentElement.scrollWidth,
+    height: document.documentElement.scrollHeight,
+    viewportWidth: innerWidth,
+    viewportHeight: innerHeight,
+  }));
+
   await phone.page.setViewportSize({ width: 844, height: 390 });
   await phone.page.waitForTimeout(300);
   await phone.page.screenshot({ path: path.join(OUT_DIR, '06-call-phone-landscape.png') });
@@ -220,11 +260,42 @@ async function main() {
   const phoneState = await phone.page.evaluate(() => window.__webrtcDebug.state());
   const deviceState = await device.page.evaluate(() => window.__webrtcDebug.state());
 
+  // Ending on one side must close the call on the other side too.
+  await phone.page.click('#leave-btn');
+  await device.page.waitForSelector('#call-overlay', { state: 'hidden' });
+  await phone.page.waitForSelector('#call-overlay', { state: 'hidden' });
+
+  // The local stream must be kept across calls: no new getUserMedia request.
+  const mediaAfterEnd = await phone.page.evaluate(() => {
+    const local = window.__webrtcDebug.state().local;
+    return {
+      gumCalls: window.__gumCalls,
+      audioTracks: local ? local.audioTracks : 0,
+      videoTracks: local ? local.videoTracks : 0,
+    };
+  });
+  if (!mediaAfterEnd.audioTracks || !mediaAfterEnd.videoTracks) {
+    throw new Error(`local media was released after the call: ${JSON.stringify(mediaAfterEnd)}`);
+  }
+  if (mediaAfterEnd.gumCalls !== 1) {
+    throw new Error(`expected exactly one getUserMedia request: ${JSON.stringify(mediaAfterEnd)}`);
+  }
+
+  // Settings -> logout returns to the auth page.
+  await phone.page.click('#settings-btn');
+  await phone.page.waitForSelector('#settings-panel:not([hidden])');
+  await phone.page.click('#settings-logout');
+  await phone.page.waitForSelector('#auth-view:not([hidden])');
+  log('settings logout returned to auth page');
+
   await phone.context.close();
   await device.context.close();
   await browser.close();
 
   if (errors.length > 0) throw new Error(`browser errors:\n${errors.join('\n')}`);
+  if (phonePortraitOverflow.width > phonePortraitOverflow.viewportWidth) {
+    throw new Error(`phone portrait overflows horizontally: ${JSON.stringify(phonePortraitOverflow)}`);
+  }
   if (phoneOverflow.width > phoneOverflow.viewportWidth) {
     throw new Error(`phone landscape overflows horizontally: ${JSON.stringify(phoneOverflow)}`);
   }
@@ -241,6 +312,8 @@ async function main() {
         relayPairs,
         phone: phoneState,
         device: deviceState,
+        mediaAfterEnd,
+        phonePortraitOverflow,
         phoneOverflow,
         deviceOverflow,
         screenshots: fs

@@ -1768,3 +1768,706 @@ input {
     min-height: 36px;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Main contacts view (avatar grid)                                    */
+/* ------------------------------------------------------------------ */
+
+.main-view {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px clamp(16px, 4vw, 40px) 44px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+.section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.section-title h2,
+.section-title h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.section-title h3 {
+  font-size: 14px;
+  color: var(--muted-strong);
+}
+
+.section-title .muted {
+  font-size: 12px;
+}
+
+.add-contact.card {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(13, 21, 38, 0.72);
+}
+
+.add-contact .muted {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+}
+
+.add-contact form {
+  display: flex;
+  gap: 8px;
+}
+
+.add-contact input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(6, 11, 22, 0.7);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+}
+
+.add-contact input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.16);
+}
+
+.add-contact .primary {
+  min-height: 44px;
+  padding: 10px 16px;
+  font-size: 13.5px;
+  flex: none;
+}
+
+.contact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 10px;
+}
+
+.contact-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--text);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.contact-card:hover {
+  background: rgba(79, 140, 255, 0.08);
+  border-color: rgba(79, 140, 255, 0.22);
+}
+
+.contact-card .avatar.big {
+  width: 72px;
+  height: 72px;
+  font-size: 26px;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+}
+
+.contact-card.online .avatar.big {
+  border-color: rgba(53, 208, 127, 0.55);
+  box-shadow: 0 0 0 4px rgba(53, 208, 127, 0.08);
+}
+
+.contact-card.offline .avatar.big {
+  opacity: 0.45;
+  filter: grayscale(0.66);
+}
+
+.contact-card .online-dot {
+  position: absolute;
+  top: 14px;
+  left: calc(50% + 22px);
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--bg);
+}
+
+.contact-card .contact-name {
+  max-width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.contact-card .contact-number {
+  max-width: 100%;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pending-section {
+  padding-top: 2px;
+}
+
+.pending-list {
+  display: grid;
+  gap: 8px;
+}
+
+.pending-list:empty {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Full-screen call overlay                                            */
+/* ------------------------------------------------------------------ */
+
+.icon-button {
+  display: inline-flex;
+}
+
+.call-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: #03060d;
+  display: flex;
+}
+
+.call-overlay .room-view {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.call-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: max(14px, env(safe-area-inset-top)) 20px 14px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0));
+  pointer-events: none;
+}
+
+.call-topbar .room-title,
+.call-topbar .call-meta {
+  pointer-events: auto;
+}
+
+.call-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.call-timer {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12.5px;
+  color: rgba(233, 238, 251, 0.72);
+}
+
+.call-icon {
+  position: relative;
+  color: var(--app-text, #e9eefb);
+}
+
+.call-icon .unread-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  opacity: 0;
+}
+
+.call-icon.unread .unread-dot {
+  opacity: 1;
+}
+
+.call-overlay .stage {
+  flex: 1;
+  min-height: 0;
+  padding: 72px 16px 104px;
+  gap: 10px;
+}
+
+.call-overlay .video-grid {
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  align-content: safe center;
+  gap: 10px;
+}
+
+.call-overlay .tile {
+  border-radius: 14px;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.call-controls {
+  position: absolute;
+  left: 50%;
+  bottom: max(22px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(9, 14, 26, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
+}
+
+.call-round {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  color: #e9eefb;
+  font-size: 11px;
+  flex: none;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.call-round:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.call-round:active {
+  transform: scale(0.96);
+}
+
+.call-round .icon {
+  width: 21px;
+  height: 21px;
+}
+
+.call-round .slash {
+  display: none;
+}
+
+.call-round.off {
+  color: #ffb3b9;
+  border-color: rgba(255, 95, 109, 0.45);
+  background: rgba(255, 95, 109, 0.16);
+}
+
+.call-round.off .slash {
+  display: block;
+}
+
+.call-round.hangup {
+  background: #e5484d;
+  border-color: #e5484d;
+  color: #fff;
+}
+
+.call-round.accept {
+  background: #2fb56b;
+  border-color: #2fb56b;
+  color: #fff;
+}
+
+.call-round.big {
+  width: 68px;
+  height: 68px;
+  font-size: 12px;
+}
+
+.call-round.big .icon {
+  width: 25px;
+  height: 25px;
+}
+
+/* Incoming full-screen */
+
+.incoming-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background:
+    radial-gradient(700px 500px at 50% 20%, rgba(79, 140, 255, 0.28), transparent 65%),
+    radial-gradient(600px 500px at 80% 90%, rgba(56, 211, 196, 0.12), transparent 60%),
+    #060a14;
+}
+
+.incoming-glow {
+  position: absolute;
+  width: min(70vw, 520px);
+  height: min(70vw, 520px);
+  border-radius: 50%;
+  border: 1px solid rgba(79, 140, 255, 0.18);
+  box-shadow: 0 0 0 40px rgba(79, 140, 255, 0.04), 0 0 0 80px rgba(79, 140, 255, 0.02);
+  animation: ring-pulse 3s ease-out infinite;
+}
+
+@keyframes ring-pulse {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  70% { transform: scale(1.08); opacity: 0.2; }
+  100% { transform: scale(0.9); opacity: 0.8; }
+}
+
+.incoming-inner {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 24px;
+}
+
+.call-avatar.huge {
+  width: 124px;
+  height: 124px;
+  margin: 0 auto 18px;
+  font-size: 44px;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 60px rgba(79, 140, 255, 0.25);
+}
+
+.incoming-inner h2 {
+  margin: 0 0 6px;
+  font-size: clamp(24px, 4vw, 34px);
+}
+
+.incoming-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.incoming-actions {
+  display: flex;
+  justify-content: center;
+  gap: 34px;
+  margin-top: 34px;
+}
+
+/* Chat drawer over the call */
+
+.call-overlay .chat {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  width: min(380px, 92vw);
+  background: #0a1120;
+  border-left: 1px solid var(--border);
+  transform: translateX(105%);
+  transition: transform 0.22s ease;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.call-overlay .chat.open {
+  transform: translateX(0);
+}
+
+.call-overlay .chat-head {
+  padding-top: max(14px, env(safe-area-inset-top));
+}
+
+.chat-head .icon-button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  color: var(--muted-strong);
+  font-size: 18px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Settings sheet                                                      */
+/* ------------------------------------------------------------------ */
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(2, 5, 12, 0.68);
+  backdrop-filter: blur(6px);
+}
+
+.settings-sheet {
+  width: min(430px, 100%);
+  max-height: 90dvh;
+  overflow-y: auto;
+  padding: 20px;
+  border-radius: 20px;
+  background: linear-gradient(160deg, #131e35, #0a1120);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.settings-account {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 18px 0;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(6, 11, 22, 0.55);
+  border: 1px solid var(--border);
+}
+
+.settings-account .avatar.big {
+  width: 58px;
+  height: 58px;
+  font-size: 22px;
+  flex: none;
+}
+
+.settings-account-info {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.settings-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.settings-number {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12.5px;
+  color: var(--muted-strong);
+  overflow-wrap: anywhere;
+}
+
+.settings-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-action {
+  min-height: 46px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+}
+
+.settings-action:hover {
+  border-color: var(--accent);
+}
+
+.settings-action.danger-text {
+  color: #ffb3b9;
+  border-color: rgba(255, 95, 109, 0.3);
+}
+
+.settings-sheet #settings-hint {
+  margin: 14px 0 0;
+  font-size: 12px;
+}
+
+.settings-foot {
+  margin: 16px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  color: #64769a;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+/* ------------------------------------------------------------------ */
+/* Mobile call/main tweaks                                             */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 700px) {
+  .main-view {
+    padding: 16px 14px 30px;
+  }
+
+  .contact-grid {
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    gap: 4px;
+  }
+
+  .contact-card .avatar.big {
+    width: 62px;
+    height: 62px;
+    font-size: 22px;
+  }
+
+  .contact-card .online-dot {
+    top: 12px;
+    left: calc(50% + 18px);
+  }
+
+  .call-overlay .stage {
+    padding: 64px 10px 96px;
+  }
+
+  .call-overlay .chat {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: 62%;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    border-radius: 18px 18px 0 0;
+    transform: translateY(105%);
+  }
+
+  .call-overlay .chat.open {
+    transform: translateY(0);
+  }
+
+  .call-controls {
+    gap: 12px;
+    padding: 8px 12px;
+  }
+
+  .call-round {
+    width: 48px;
+    height: 48px;
+  }
+
+  .call-round .icon {
+    width: 19px;
+    height: 19px;
+  }
+
+  .incoming-actions {
+    gap: 26px;
+  }
+
+  .call-avatar.huge {
+    width: 96px;
+    height: 96px;
+    font-size: 34px;
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .call-overlay .stage {
+    padding: 54px 8px 78px;
+  }
+
+  .call-controls {
+    bottom: 12px;
+    padding: 6px 10px;
+  }
+
+  .call-round {
+    width: 42px;
+    height: 42px;
+  }
+
+  .call-round.big {
+    width: 58px;
+    height: 58px;
+  }
+
+  .incoming-inner {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 22px;
+    text-align: left;
+  }
+
+  .call-avatar.huge {
+    margin: 0;
+  }
+
+  .incoming-actions {
+    margin-top: 6px;
+  }
+}
+
+/* Base avatar (used by contact cards and settings, not inside .contact-item) */
+.avatar {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #dbe7ff;
+  background: linear-gradient(135deg, rgba(79, 140, 255, 0.4), rgba(56, 211, 196, 0.26));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 600;
+  user-select: none;
+}
+
+/* Let 1:1 call tiles fill the full-screen stage. */
+.call-overlay .video-grid {
+  grid-auto-rows: 1fr;
+  align-content: stretch;
+}
+
+.call-overlay .tile {
+  aspect-ratio: auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.call-topbar .room-title {
+  min-width: 0;
+}
+
+.call-topbar .room-title h2 {
+  max-width: 42vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

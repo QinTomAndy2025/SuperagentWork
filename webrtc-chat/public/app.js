@@ -60,13 +60,19 @@ const els = {
 
   meName: $('#me-name'),
   meRole: $('#me-role'),
-  meNumber: $('#me-number'),
-  copyMyNumber: $('#copy-my-number'),
   wsStatus: $('#ws-status'),
-  logoutBtn: $('#logout-btn'),
-  contactsToggle: $('#contacts-toggle'),
-  contactsClose: $('#contacts-close'),
-  contactsPanel: $('#contacts-panel'),
+  settingsBtn: $('#settings-btn'),
+  settingsPanel: $('#settings-panel'),
+  settingsClose: $('#settings-close'),
+  settingsAvatar: $('#settings-avatar'),
+  settingsName: $('#settings-name'),
+  settingsRole: $('#settings-role'),
+  settingsNumber: $('#settings-number'),
+  settingsCopy: $('#settings-copy'),
+  settingsRefresh: $('#settings-refresh'),
+  settingsMedia: $('#settings-media'),
+  settingsLogout: $('#settings-logout'),
+  settingsHint: $('#settings-hint'),
   addContactHint: $('#add-contact-hint'),
   addContactForm: $('#add-contact-form'),
   addContactInput: $('#add-contact-input'),
@@ -78,23 +84,25 @@ const els = {
   contactsList: $('#contacts-list'),
   contactsEmpty: $('#contacts-empty'),
 
-  callEmpty: $('#call-empty'),
+  callOverlay: $('#call-overlay'),
+  incomingPanel: $('#incoming-panel'),
   roomView: $('#room-view'),
   connDot: $('#conn-dot'),
   roomName: $('#room-name'),
   peerCount: $('#peer-count'),
+  callTimer: $('#call-timer'),
+  chatToggle: $('#chat-toggle'),
+  chatPanel: $('#chat-panel'),
+  chatClose: $('#chat-close'),
   leaveBtn: $('#leave-btn'),
   banner: $('#banner'),
   videos: $('#videos'),
   micBtn: $('#mic-btn'),
   camBtn: $('#cam-btn'),
-  retryMedia: $('#retry-media'),
-  chatStatus: $('#chat-status'),
   messages: $('#messages'),
   chatForm: $('#chat-form'),
   chatInput: $('#chat-input'),
 
-  incomingCall: $('#incoming-call'),
   incomingCallAvatar: $('#incoming-call-avatar'),
   incomingCallName: $('#incoming-call-name'),
   rejectCall: $('#reject-call'),
@@ -115,6 +123,8 @@ const state = {
   callPeer: null,
   callAnswered: false,
   callTimeout: null,
+  callStartedAt: 0,
+  callTimerInterval: null,
   incomingInvite: null,
   incomingTimer: null,
   peers: new Map(),
@@ -345,6 +355,8 @@ function clearToken() {
 function showAuth(message) {
   els.appView.hidden = true;
   els.authView.hidden = false;
+  els.callOverlay.hidden = true;
+  els.settingsPanel.hidden = true;
   if (message) setAuthError(message);
   setAuthError(message || '');
   setTimeout(() => {
@@ -360,7 +372,11 @@ function updateIdentity() {
   if (!state.user) return;
   els.meName.textContent = state.user.name;
   els.meRole.textContent = state.user.role === 'phone' ? '手机' : '设备';
-  els.meNumber.textContent = myNumber();
+  els.settingsName.textContent = state.user.name;
+  els.settingsRole.textContent =
+    state.user.role === 'phone' ? '手机用户' : '设备用户';
+  els.settingsNumber.textContent = myNumber();
+  els.settingsAvatar.textContent = initialOf(state.user.name);
   if (state.user.role === 'phone') {
     els.addContactHint.textContent = '输入设备用户的 12 位设备号，对方确认后即可通话。';
     els.addContactInput.placeholder = '12 位设备号';
@@ -384,9 +400,9 @@ async function completeAuth(result) {
   els.authView.hidden = true;
   els.appView.hidden = false;
   updateIdentity();
-  showCallEmpty();
   connectSocket();
   refreshContacts();
+  ensureLocalMedia();
 }
 
 async function handleSessionExpired(message = '登录状态已失效，请重新登录') {
@@ -396,6 +412,7 @@ async function handleSessionExpired(message = '登录状态已失效，请重新
   state.contacts = { contacts: [], incoming: [], outgoing: [] };
   renderContacts();
   leaveCall({ silent: true });
+  releaseLocalMedia();
   showAuth(message);
 }
 
@@ -474,6 +491,9 @@ async function logout() {
   state.user = null;
   closeSocket();
   leaveCall({ silent: true });
+  releaseLocalMedia();
+  els.settingsPanel.hidden = true;
+  els.settingsHint.textContent = '';
   state.contacts = { contacts: [], incoming: [], outgoing: [] };
   renderContacts();
   els.deviceSuccess.hidden = true;
@@ -531,27 +551,32 @@ function renderContacts() {
   els.outgoingList.replaceChildren();
 
   for (const item of contacts) {
-    const row = document.createElement('div');
-    row.className = 'contact-item';
-    row.dataset.userId = item.user.id;
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'contact-card' + (item.user.online ? ' online' : ' offline');
+    card.dataset.userId = item.user.id;
+    card.title = item.user.online
+      ? `点击呼叫 ${item.user.name}`
+      : `${item.user.name} 当前离线`;
 
-    row.append(makeAvatar(item.user), makeContactInfo(item.user));
+    const avatar = makeAvatar(item.user);
+    avatar.classList.add('big');
 
     const dot = document.createElement('span');
     dot.className = 'online-dot' + (item.user.online ? ' online' : '');
     dot.title = item.user.online ? '在线' : '离线';
-    row.append(dot);
 
-    const call = document.createElement('button');
-    call.type = 'button';
-    call.className = 'contact-call';
-    call.textContent = '通话';
-    call.disabled = !item.user.online;
-    call.title = item.user.online ? `与 ${item.user.name} 通话` : '对方当前离线';
-    call.addEventListener('click', () => startCall(item.user));
-    row.append(call);
+    const name = document.createElement('span');
+    name.className = 'contact-name';
+    name.textContent = item.user.name;
 
-    els.contactsList.append(row);
+    const number = document.createElement('span');
+    number.className = 'contact-number';
+    number.textContent = contactNumber(item.user) || '';
+
+    card.append(avatar, dot, name, number);
+    card.addEventListener('click', () => startCall(item.user));
+    els.contactsList.append(card);
   }
 
   for (const item of incoming) {
@@ -794,6 +819,7 @@ function handleServerMessage(msg) {
       state.callAnswered = true;
       clearTimeout(state.callTimeout);
       state.callTimeout = null;
+      startCallTimer();
       updateRoomTitle();
       createPeer(msg.peer);
       addSystem(`${msg.peer.name} 加入了通话`);
@@ -806,6 +832,14 @@ function handleServerMessage(msg) {
       closePeer(peer);
       addSystem(`${name} 离开了通话`);
       updateCount();
+      if (state.room && state.callPeer && state.peers.size === 0) {
+        const roomId = state.room;
+        setTimeout(() => {
+          if (state.room === roomId && state.peers.size === 0) {
+            leaveCall({ reason: '对方已结束通话' });
+          }
+        }, 250);
+      }
       break;
     }
 
@@ -820,6 +854,9 @@ function handleServerMessage(msg) {
         ts: msg.ts,
         self: msg.from.id === state.selfId,
       });
+      if (!els.chatPanel.classList.contains('open')) {
+        els.chatToggle.classList.add('unread');
+      }
       break;
 
     case 'error':
@@ -867,7 +904,7 @@ function mediaErrorMessage(err) {
   switch (err && err.name) {
     case 'NotAllowedError':
     case 'SecurityError':
-      return '摄像头/麦克风权限被拒绝，当前为文字模式。可点击“重试音视频”重新授权。';
+      return '摄像头/麦克风权限被拒绝，当前为文字模式。可在“设置 → 重新授权摄像头/麦克风”中重试。';
     case 'NotFoundError':
     case 'DevicesNotFoundError':
       return '没有找到可用的摄像头或麦克风，当前为文字模式。';
@@ -890,9 +927,9 @@ function releaseLocalMedia() {
     state.localVideo.srcObject = null;
     if (state.localTile) state.localTile.classList.remove('has-video');
   }
-  els.retryMedia.hidden = true;
   state.mediaError = '';
   hideBanner();
+  if (els.settingsHint) els.settingsHint.textContent = '';
   syncMediaButtons();
 }
 
@@ -900,8 +937,8 @@ async function ensureLocalMedia() {
   if (state.localStream) return true;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     state.mediaError = mediaErrorMessage();
-    showBanner(state.mediaError);
-    els.retryMedia.hidden = false;
+    if (els.settingsHint) els.settingsHint.textContent = state.mediaError;
+    if (state.room) showBanner(state.mediaError);
     syncMediaButtons();
     return false;
   }
@@ -919,13 +956,15 @@ async function ensureLocalMedia() {
     for (const peer of state.peers.values()) applyLocalTracks(peer.pc);
     state.mediaError = '';
     hideBanner();
-    els.retryMedia.hidden = true;
+    if (els.settingsHint) {
+      els.settingsHint.textContent = '摄像头/麦克风已开启；浏览器允许后通话不会再询问。';
+    }
     syncMediaButtons();
     return true;
   } catch (err) {
     state.mediaError = mediaErrorMessage(err);
-    showBanner(state.mediaError);
-    els.retryMedia.hidden = false;
+    if (els.settingsHint) els.settingsHint.textContent = state.mediaError;
+    if (state.room) showBanner(state.mediaError);
     syncMediaButtons();
     return false;
   }
@@ -1210,16 +1249,6 @@ function appendMessage({ name, text, ts, self }) {
   els.messages.scrollTop = els.messages.scrollHeight;
 }
 
-function showCallEmpty() {
-  els.callEmpty.hidden = false;
-  els.roomView.hidden = true;
-}
-
-function showRoomView() {
-  els.callEmpty.hidden = true;
-  els.roomView.hidden = false;
-}
-
 function updateRoomTitle() {
   if (state.callPeer) {
     els.roomName.textContent = state.callAnswered
@@ -1228,6 +1257,53 @@ function updateRoomTitle() {
   } else if (state.room) {
     els.roomName.textContent = state.room;
   }
+}
+
+function showRoomView() {
+  els.callOverlay.hidden = false;
+  els.incomingPanel.hidden = true;
+  els.roomView.hidden = false;
+  els.settingsPanel.hidden = true;
+}
+
+function showIncomingView() {
+  els.callOverlay.hidden = false;
+  els.incomingPanel.hidden = false;
+  els.roomView.hidden = true;
+  els.settingsPanel.hidden = true;
+}
+
+function hideCallOverlay() {
+  els.callOverlay.hidden = true;
+  els.roomView.hidden = true;
+  els.incomingPanel.hidden = true;
+  closeChat();
+}
+
+function openChat() {
+  els.chatPanel.classList.add('open');
+  els.chatToggle.classList.remove('unread');
+}
+
+function closeChat() {
+  els.chatPanel.classList.remove('open');
+}
+
+function startCallTimer() {
+  if (state.callTimerInterval) return;
+  state.callStartedAt = Date.now();
+  els.callTimer.textContent = '00:00';
+  state.callTimerInterval = setInterval(() => {
+    const seconds = Math.floor((Date.now() - state.callStartedAt) / 1000);
+    els.callTimer.textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+  }, 1000);
+}
+
+function stopCallTimer() {
+  clearInterval(state.callTimerInterval);
+  state.callTimerInterval = null;
+  state.callStartedAt = 0;
+  els.callTimer.textContent = '00:00';
 }
 
 function sendJoin() {
@@ -1247,6 +1323,8 @@ async function enterCall(roomId, peer, answered) {
   state.localTile = null;
   state.localVideo = null;
   hideBanner();
+  closeChat();
+  stopCallTimer();
 
   showRoomView();
   updateRoomTitle();
@@ -1256,13 +1334,7 @@ async function enterCall(roomId, peer, answered) {
 
   await ensureLocalMedia();
   if (state.room !== roomId) return;
-  if (state.wsAuthed) {
-    sendJoin();
-  } else if (state.ws) {
-    // auth-ok will send the join once the socket is authenticated
-  } else {
-    state.token = state.token || '';
-  }
+  if (state.wsAuthed) sendJoin();
 }
 
 function startCall(contact) {
@@ -1280,7 +1352,6 @@ function startCall(contact) {
     showToast('实时连接已断开，无法发起通话');
     return;
   }
-  els.contactsPanel.classList.remove('open');
   state.callTimeout = setTimeout(() => {
     if (state.room !== roomId || state.callAnswered) return;
     send({ type: 'call-cancel', to: contact.id, room: roomId });
@@ -1302,6 +1373,7 @@ function handleWelcome(msg) {
   for (const peer of msg.peers || []) createPeer(peer);
   updateCount();
   setConnectionOnline(true);
+  if (state.callAnswered) startCallTimer();
 }
 
 function leaveCall({ reason, silent } = {}) {
@@ -1314,25 +1386,22 @@ function leaveCall({ reason, silent } = {}) {
 
   if (room) {
     send({ type: 'leave' });
-    if (peer) {
-      send({ type: 'call-cancel', to: peer.id, room });
-    }
+    if (peer) send({ type: 'call-cancel', to: peer.id, room });
   }
 
+  stopCallTimer();
   closeAllPeers();
-  releaseLocalMedia();
   state.room = null;
   state.callPeer = null;
   state.callAnswered = false;
   state.selfId = null;
   state.hasJoinedOnce = false;
   state.incomingInvite = null;
-  els.incomingCall.hidden = true;
   els.videos.replaceChildren();
   els.messages.replaceChildren();
   state.localTile = null;
   state.localVideo = null;
-  showCallEmpty();
+  hideCallOverlay();
   updateCount();
   setConnectionOnline(Boolean(state.wsAuthed));
   if (reason && !silent) showToast(reason);
@@ -1353,7 +1422,7 @@ function handleIncomingCall(msg) {
   state.incomingInvite = msg;
   els.incomingCallName.textContent = msg.from.name;
   els.incomingCallAvatar.textContent = initialOf(msg.from.name);
-  els.incomingCall.hidden = false;
+  showIncomingView();
   clearTimeout(state.incomingTimer);
   state.incomingTimer = setTimeout(() => {
     if (!state.incomingInvite) return;
@@ -1365,7 +1434,7 @@ function handleIncomingCall(msg) {
       reason: 'timeout',
     });
     state.incomingInvite = null;
-    els.incomingCall.hidden = true;
+    hideCallOverlay();
   }, 30000);
 }
 
@@ -1375,8 +1444,6 @@ function acceptIncomingCall() {
   clearTimeout(state.incomingTimer);
   state.incomingTimer = null;
   state.incomingInvite = null;
-  els.incomingCall.hidden = true;
-  els.contactsPanel.classList.remove('open');
   send({
     type: 'call-response',
     to: invite.from.id,
@@ -1384,6 +1451,7 @@ function acceptIncomingCall() {
     accepted: true,
   });
   enterCall(invite.room, invite.from, true);
+  startCallTimer();
 }
 
 function rejectIncomingCall() {
@@ -1392,13 +1460,13 @@ function rejectIncomingCall() {
   clearTimeout(state.incomingTimer);
   state.incomingTimer = null;
   state.incomingInvite = null;
-  els.incomingCall.hidden = true;
   send({
     type: 'call-response',
     to: invite.from.id,
     room: invite.room,
     accepted: false,
   });
+  hideCallOverlay();
   showToast('已拒绝通话');
 }
 
@@ -1408,6 +1476,7 @@ function handleCallResponse(msg) {
     state.callAnswered = true;
     clearTimeout(state.callTimeout);
     state.callTimeout = null;
+    startCallTimer();
     updateRoomTitle();
   } else if (!state.peers.size) {
     leaveCall({ reason: '对方拒绝了通话' });
@@ -1419,13 +1488,29 @@ function handleCallCancel(msg) {
     clearTimeout(state.incomingTimer);
     state.incomingTimer = null;
     state.incomingInvite = null;
-    els.incomingCall.hidden = true;
+    hideCallOverlay();
     showToast('对方已取消呼叫');
     return;
   }
-  if (state.room === msg.room && !state.callAnswered) {
-    leaveCall({ reason: '对方已取消呼叫' });
+  if (state.room === msg.room) {
+    leaveCall({ reason: state.callAnswered ? '对方已结束通话' : '对方已取消呼叫' });
   }
+}
+
+function openSettings() {
+  if (!state.user) return;
+  els.settingsName.textContent = state.user.name;
+  els.settingsRole.textContent = state.user.role === 'phone' ? '手机用户' : '设备用户';
+  els.settingsNumber.textContent = myNumber();
+  els.settingsAvatar.textContent = initialOf(state.user.name);
+  els.settingsHint.textContent = state.localStream
+    ? '摄像头/麦克风已开启；浏览器允许后通话不会再询问。'
+    : state.mediaError || '摄像头/麦克风尚未开启。';
+  els.settingsPanel.hidden = false;
+}
+
+function closeSettings() {
+  els.settingsPanel.hidden = true;
 }
 
 function hideBanner() {
@@ -1500,9 +1585,12 @@ els.deviceEnterApp.addEventListener('click', () => {
   }
 });
 
-els.logoutBtn.addEventListener('click', logout);
-
-els.copyMyNumber.addEventListener('click', async () => {
+els.settingsBtn.addEventListener('click', openSettings);
+els.settingsClose.addEventListener('click', closeSettings);
+els.settingsPanel.addEventListener('click', (event) => {
+  if (event.target === els.settingsPanel) closeSettings();
+});
+els.settingsCopy.addEventListener('click', async () => {
   const value = myNumber();
   if (!value) return;
   try {
@@ -1512,13 +1600,24 @@ els.copyMyNumber.addEventListener('click', async () => {
     window.prompt('复制号码：', value);
   }
 });
+els.settingsRefresh.addEventListener('click', async () => {
+  await refreshContacts();
+  showToast('通讯录已刷新');
+});
+els.settingsMedia.addEventListener('click', async () => {
+  const ok = await ensureLocalMedia();
+  showToast(ok ? '摄像头/麦克风已开启' : state.mediaError || '无法开启摄像头/麦克风');
+});
+els.settingsLogout.addEventListener('click', async () => {
+  closeSettings();
+  await logout();
+});
 
-els.contactsToggle.addEventListener('click', () => {
-  els.contactsPanel.classList.add('open');
+els.chatToggle.addEventListener('click', () => {
+  if (els.chatPanel.classList.contains('open')) closeChat();
+  else openChat();
 });
-els.contactsClose.addEventListener('click', () => {
-  els.contactsPanel.classList.remove('open');
-});
+els.chatClose.addEventListener('click', closeChat);
 
 els.addContactForm.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -1530,13 +1629,6 @@ els.addContactForm.addEventListener('submit', (event) => {
 els.leaveBtn.addEventListener('click', () => leaveCall());
 els.micBtn.addEventListener('click', toggleMic);
 els.camBtn.addEventListener('click', toggleCamera);
-
-els.retryMedia.addEventListener('click', async () => {
-  els.retryMedia.disabled = true;
-  const ok = await ensureLocalMedia();
-  els.retryMedia.disabled = false;
-  if (ok) showToast('音视频已开启');
-});
 
 els.chatForm.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -1660,9 +1752,9 @@ function loadIceServers() {
       els.authView.hidden = true;
       els.appView.hidden = false;
       updateIdentity();
-      showCallEmpty();
       connectSocket();
       refreshContacts();
+      ensureLocalMedia();
       return;
     } catch (err) {
       if (err.status === 401) {

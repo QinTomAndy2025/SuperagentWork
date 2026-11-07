@@ -113,11 +113,15 @@ sudo systemctl start webrtc-chat
 | `00-landing.png` | `/` 手机 / 设备入口选择页 |
 | `01-auth-desktop.png` | `/phone` 手机登录/注册页 |
 | `02-device-register.png` | Pad 横屏设备注册成功，显示 12 位设备号 |
-| `03-contacts-tablet.png` | Pad 横屏通讯录（已确认联系人、在线状态） |
-| `04-call-phone.png` | 手机视角桌面尺寸通话 + 聊天 |
-| `05-call-device-tablet-landscape.png` | Pad 横屏通话 |
-| `06-call-phone-landscape.png` | 手机横屏 844×390 通话 |
-| `07-call-pad-portrait.png` | Pad 竖屏 768×1024 通话 |
+| `03-contacts-tablet.png` | Pad 横屏圆形头像通讯录（已确认联系人、在线状态） |
+| `03a-settings.png` | 设置菜单（账号、刷新、重新授权、退出登录） |
+| `03b-incoming-call.png` | Pad 全屏来电（接听/拒绝） |
+| `04-call-phone.png` | 手机视角桌面尺寸全屏通话 |
+| `04a-call-chat.png` | 全屏通话 + 聊天抽屉 |
+| `06a-call-phone-portrait.png` | 手机竖屏 390×844 全屏通话 |
+| `05-call-device-tablet-landscape.png` | Pad 横屏全屏通话 |
+| `06-call-phone-landscape.png` | 手机横屏 844×390 全屏通话 |
+| `07-call-pad-portrait.png` | Pad 竖屏 768×1024 全屏通话 |
 | `08-sms-register-test-mode.png` | 短信注册（console 测试模式，非生产） |
 | `09-device-page.png` | `/device` 设备独立页面 |
 | `before/` | 上一版本（账号功能之前）的 3 张界面截图，用于 PR 的 Before 对比 |
