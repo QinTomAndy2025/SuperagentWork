@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#070b16" />
+    <title>WebRTC 手机 · 设备通话</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <section id="auth-view" class="auth-view">
+        <div class="auth-shell">
+          <aside class="auth-hero">
+            <div class="brand">
+              <span class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="6" width="13" height="12" rx="3" />
+                  <path d="m16 10 4-2v8l-4-2" />
+                </svg>
+              </span>
+              <span>WebRTC 手机 · 设备</span>
+            </div>
+            <h1>连接你的手机与设备</h1>
+            <p class="hero-copy">
+              手机号注册手机用户，平板自动分配 12 位设备号。只有双方确认添加后，才能互相发起音视频通话。
+            </p>
+            <ul class="hero-list">
+              <li><strong>手机用户</strong>：手机号注册，横屏通话</li>
+              <li><strong>设备用户</strong>：自动激活，唯一 12 位设备号</li>
+              <li><strong>双向确认</strong>：请求通过后才能建立联系</li>
+            </ul>
+            <p class="hero-foot">局域网 / 内网部署 · 自签名证书需首次信任</p>
+          </aside>
+
+          <div class="auth-card">
+            <p id="page-role-title" class="page-role-title" hidden></p>
+            <div id="auth-tabs" class="auth-tabs" role="tablist" aria-label="注册类型">
+              <button id="tab-phone" class="auth-tab active" type="button" role="tab" aria-selected="true" data-role="phone">手机用户</button>
+              <button id="tab-device" class="auth-tab" type="button" role="tab" aria-selected="false" data-role="device">设备用户</button>
+            </div>
+
+            <div id="phone-panel" class="auth-panel">
+              <div class="mode-switch" role="tablist" aria-label="手机用户操作">
+                <button id="phone-mode-login" class="mode active" type="button">登录</button>
+                <button id="phone-mode-register" class="mode" type="button">注册</button>
+              </div>
+              <div id="phone-login-mode" class="mode-switch" hidden>
+                <button id="phone-login-mode-password" class="mode active" type="button">密码登录</button>
+                <button id="phone-login-mode-sms" class="mode" type="button">验证码登录</button>
+              </div>
+              <form id="phone-login-form" class="auth-form" autocomplete="on">
+                <label class="field"><span>手机号</span><input id="phone-login-phone" inputmode="numeric" maxlength="11" placeholder="11 位手机号" required /></label>
+                <label class="field"><span>密码</span><input id="phone-login-password" type="password" maxlength="128" placeholder="密码" required /></label>
+                <button class="primary" type="submit">登录</button>
+              </form>
+              <form id="phone-sms-login-form" class="auth-form" hidden autocomplete="on">
+                <label class="field"><span>手机号</span><input id="phone-sms-login-phone" inputmode="numeric" maxlength="11" placeholder="11 位手机号" required /></label>
+                <label class="field"><span>短信验证码</span>
+                  <div class="code-row">
+                    <input id="phone-sms-login-code" inputmode="numeric" maxlength="6" placeholder="6 位验证码" required />
+                    <button id="phone-sms-login-send" class="ghost code-btn" type="button">获取验证码</button>
+                  </div>
+                </label>
+                <button class="primary" type="submit">验证码登录</button>
+              </form>
+              <form id="phone-register-form" class="auth-form" hidden autocomplete="on">
+                <label class="field"><span>手机号</span><input id="phone-register-phone" inputmode="numeric" maxlength="11" placeholder="11 位手机号" required /></label>
+                <label id="phone-register-code-field" class="field" hidden><span>短信验证码</span>
+                  <div class="code-row">
+                    <input id="phone-register-code" inputmode="numeric" maxlength="6" placeholder="6 位验证码" />
+                    <button id="phone-register-send" class="ghost code-btn" type="button">获取验证码</button>
+                  </div>
+                </label>
+                <label class="field"><span>昵称</span><input id="phone-register-name" maxlength="32" placeholder="例如：小明" required /></label>
+                <label class="field"><span>设置密码（至少 6 位）</span><input id="phone-register-password" type="password" minlength="6" maxlength="128" placeholder="密码" required /></label>
+                <button class="primary" type="submit">注册并登录</button>
+              </form>
+            </div>
+
+            <div id="device-panel" class="auth-panel" hidden>
+              <p class="panel-note">设备注册后立即激活，并分配唯一的 12 位设备号。</p>
+              <div class="mode-switch" role="tablist" aria-label="设备用户操作">
+                <button id="device-mode-login" class="mode active" type="button">登录</button>
+                <button id="device-mode-register" class="mode" type="button">注册</button>
+              </div>
+              <form id="device-login-form" class="auth-form" autocomplete="on">
+                <label class="field"><span>12 位设备号</span><input id="device-login-number" inputmode="numeric" maxlength="12" placeholder="12 位数字" required /></label>
+                <label class="field"><span>密码</span><input id="device-login-password" type="password" maxlength="128" placeholder="密码" required /></label>
+                <button class="primary" type="submit">登录</button>
+              </form>
+              <form id="device-register-form" class="auth-form" hidden autocomplete="on">
+                <label class="field"><span>设备名称</span><input id="device-register-name" maxlength="32" placeholder="例如：客厅平板" required /></label>
+                <label class="field"><span>设置密码（至少 6 位）</span><input id="device-register-password" type="password" minlength="6" maxlength="128" placeholder="密码" required /></label>
+                <button class="primary" type="submit">注册并激活</button>
+              </form>
+              <div id="device-register-success" class="device-success" hidden>
+                <h3>设备已激活</h3>
+                <p>请保存下面的设备号，手机用户添加它即可联系此设备：</p>
+                <div id="device-number-display" class="device-number" aria-live="polite"></div>
+                <button id="device-enter-app" class="primary" type="button">进入设备</button>
+              </div>
+            </div>
+
+            <p id="auth-error" class="error" role="alert" hidden></p>
+            <p id="page-switch" class="page-switch" hidden></p>
+            <p class="auth-foot">浏览器会要求摄像头 / 麦克风权限；拒绝后仍可使用文字消息。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="app-view" class="app-view" hidden>
+        <header class="app-header">
+          <div class="brand brand-compact">
+            <span class="brand-mark small" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="6" width="13" height="12" rx="3" />
+                <path d="m16 10 4-2v8l-4-2" />
+              </svg>
+            </span>
+            <span class="brand-name">WebRTC 手机 · 设备</span>
+          </div>
+          <div class="me">
+            <span id="me-name" class="me-name"></span>
+            <span id="me-role" class="badge"></span>
+          </div>
+          <div class="header-actions">
+            <span id="ws-status" class="ws-status" title="实时连接状态"></span>
+            <button id="settings-btn" class="icon-button" type="button" aria-label="设置">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.11 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.06.36.2.7.42.98.28.3.65.47 1.05.5H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1.11z" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <main class="main-view">
+          <section class="add-contact card">
+            <div class="section-title">
+              <h2>添加联系人</h2>
+              <span class="muted">需要对方确认</span>
+            </div>
+            <p id="add-contact-hint" class="muted"></p>
+            <form id="add-contact-form" autocomplete="off">
+              <input id="add-contact-input" inputmode="numeric" autocomplete="off" required />
+              <button class="primary" type="submit">发送请求</button>
+            </form>
+          </section>
+
+          <section class="contacts-section">
+            <div class="section-title">
+              <h2>通讯录 <span id="contacts-count" class="count">0</span></h2>
+              <span class="muted">点击头像呼叫</span>
+            </div>
+            <div id="contacts-list" class="contact-grid"></div>
+            <p id="contacts-empty" class="empty-hint">还没有联系人。添加对方并等对方确认后，这里会出现头像。</p>
+          </section>
+
+          <section class="pending-section">
+            <div class="section-title">
+              <h3>待我确认 <span id="incoming-count" class="count">0</span></h3>
+            </div>
+            <div id="incoming-list" class="pending-list"></div>
+          </section>
+
+          <section class="pending-section">
+            <div class="section-title">
+              <h3>我发出的 <span id="outgoing-count" class="count">0</span></h3>
+            </div>
+            <div id="outgoing-list" class="pending-list"></div>
+          </section>
+        </main>
+      </section>
+    </div>
+
+    <div id="call-overlay" class="call-overlay" hidden>
+      <section id="incoming-panel" class="incoming-panel" hidden>
+        <div class="incoming-glow" aria-hidden="true"></div>
+        <div class="incoming-inner">
+          <div id="incoming-call-avatar" class="call-avatar huge">?</div>
+          <h2 id="incoming-call-name"></h2>
+          <p class="incoming-sub">邀请你进行音视频通话</p>
+          <div class="incoming-actions">
+            <button id="reject-call" class="call-round hangup big" type="button" aria-label="拒绝">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14c4-5 12-5 16 0v3a2 2 0 0 1-2 2h-2l-2-3-1 1a10 10 0 0 0-2-2l-1 1-2-3H6a2 2 0 0 1-2-2z"/><path d="m5 5 14 14"/></svg>
+              <span>拒绝</span>
+            </button>
+            <button id="accept-call" class="call-round accept big" type="button" aria-label="接听">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14c4-5 12-5 16 0v3a2 2 0 0 1-2 2h-2l-2-3-1 1a10 10 0 0 0-2-2l-1 1-2-3H6a2 2 0 0 1-2-2z"/></svg>
+              <span>接听</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="room-view" class="room-view" hidden>
+        <header class="call-topbar">
+          <div class="room-title">
+            <span id="conn-dot" class="conn-dot" title="连接状态"></span>
+            <h2 id="room-name">通话</h2>
+            <span id="peer-count" class="badge">1 人</span>
+          </div>
+          <div class="call-meta">
+            <span id="call-timer" class="call-timer">00:00</span>
+            <button id="chat-toggle" class="icon-button call-icon" type="button" aria-label="聊天">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.9 9.9 0 0 1-3.6-.7L3 21l1.3-4.2A8.4 8.4 0 1 1 21 11.5z"/></svg>
+              <span class="unread-dot"></span>
+            </button>
+          </div>
+        </header>
+
+        <div class="stage">
+          <div id="banner" class="banner" hidden></div>
+          <div id="videos" class="video-grid"></div>
+          <div class="call-controls">
+            <button id="mic-btn" class="call-round" type="button" aria-pressed="true" title="开关麦克风" aria-label="开关麦克风">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/><path class="slash" d="m4 4 16 16"/></svg>
+            </button>
+            <button id="cam-btn" class="call-round" type="button" aria-pressed="true" title="开关摄像头" aria-label="开关摄像头">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="3"/><path d="m16 10 4-2v8l-4-2"/><path class="slash" d="m4 4 16 16"/></svg>
+            </button>
+            <button id="leave-btn" class="call-round hangup" type="button" title="结束通话" aria-label="结束通话">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14c4-5 12-5 16 0v3a2 2 0 0 1-2 2h-2l-2-3-1 1a10 10 0 0 0-2-2l-1 1-2-3H6a2 2 0 0 1-2-2z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <aside id="chat-panel" class="chat">
+          <div class="chat-head">
+            <h3>聊天</h3>
+            <button id="chat-close" class="icon-button" type="button" aria-label="关闭聊天">×</button>
+          </div>
+          <div id="messages" class="messages" role="log" aria-live="polite"></div>
+          <form id="chat-form" class="chat-form" autocomplete="off">
+            <input id="chat-input" maxlength="2000" placeholder="输入消息…" aria-label="消息内容" />
+            <button type="submit" class="primary">发送</button>
+          </form>
+        </aside>
+      </section>
+    </div>
+
+    <div id="settings-panel" class="settings-overlay" hidden>
+      <div class="settings-sheet" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div class="settings-head">
+          <h2 id="settings-title">设置</h2>
+          <button id="settings-close" class="icon-button" type="button" aria-label="关闭设置">×</button>
+        </div>
+        <div class="settings-account">
+          <div id="settings-avatar" class="avatar big">?</div>
+          <div class="settings-account-info">
+            <div id="settings-name" class="settings-name"></div>
+            <div id="settings-role" class="muted"></div>
+            <div id="settings-number" class="settings-number"></div>
+          </div>
+        </div>
+        <div class="settings-actions">
+          <button id="settings-copy" class="settings-action" type="button">复制我的号码</button>
+          <button id="settings-refresh" class="settings-action" type="button">刷新通讯录</button>
+          <button id="settings-media" class="settings-action" type="button">重新授权摄像头/麦克风</button>
+          <button id="settings-logout" class="settings-action danger-text" type="button">退出登录</button>
+        </div>
+        <p id="settings-hint" class="muted"></p>
+        <p class="settings-foot">账号、联系人和通话记录由服务器管理。</p>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" hidden></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

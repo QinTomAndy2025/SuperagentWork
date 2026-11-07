@@ -1,0 +1,10 @@
+<resources>
+    <string name="cancel">取消</string>
+    <string name="retry">重试</string>
+    <string name="exit_title">退出应用？</string>
+    <string name="exit_message">当前通话会结束。</string>
+    <string name="exit">退出</string>
+    <string name="error_title">无法打开页面</string>
+    <string name="error_default">请检查手机与服务器的网络连接后重试。</string>
+    <string name="cert_title">证书不受信任</string>
+</resources>

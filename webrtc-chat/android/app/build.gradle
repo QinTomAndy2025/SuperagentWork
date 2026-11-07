@@ -1,0 +1,49 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.shzhihuan.webrtcphone'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+        buildConfigField "String", "PRIMARY_BASE", '"https://www.shzhihuan.cn:8443"'
+        buildConfigField "String", "FALLBACK_BASE", '"https://192.168.1.110:8443"'
+    }
+
+    flavorDimensions "role"
+    productFlavors {
+        phone {
+            dimension "role"
+            applicationId "com.shzhihuan.webrtcphone"
+            resValue "string", "app_name", "WebRTC 手机"
+            buildConfigField "String", "PAGE_PATH", '"/phone"'
+        }
+        device {
+            dimension "role"
+            applicationId "com.shzhihuan.webrtcdevice"
+            resValue "string", "app_name", "WebRTC 设备"
+            buildConfigField "String", "PAGE_PATH", '"/device"'
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
