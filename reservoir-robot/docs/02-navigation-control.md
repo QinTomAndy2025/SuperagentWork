@@ -51,9 +51,9 @@ $$
 
 | 定位状态 | 判定 | 控制策略 | 数据标记 |
 | --- | --- | --- | --- |
-| RTK 固定解 | fix type 4，基线正常 | 正常自主，全速 | `fix=rtk_fixed` |
+| RTK 固定解 | fix type 6，基线正常 | 正常自主，全速 | `fix=rtk_fixed` |
 | RTK 浮点解 | fix type 5 | 限速 0.8 m/s，放宽航迹阈值 | `fix=rtk_float` |
-| 单点 GPS | fix type 1/2 | 限速 0.6 m/s，仅保留人工监督下的简单航线 | `fix=gps` |
+| 单点/DGPS | fix type 2–4 | 限速 0.6 m/s，仅保留人工监督下的简单航线 | `fix=gps` |
 | GPS 丢失 < 60 s | 无有效定位 | 航位推算 + 罗盘保持航向，减速，尝试重捕 | `fix=dead_reckoning` |
 | GPS 丢失 ≥ 60 s | 持续无定位 | 原地低速待命/顶风保持，告警，等待人工 | `fix=lost` |
 
@@ -178,17 +178,17 @@ $$
 
 ### 2.4.3 推力分配
 
-双推进器左右对称安装，间距 `2b`（`b` 为单侧力臂）。令左右推力为 `T_L, T_R`：
+双推进器左右对称安装，间距 `2b`（`b` 为单侧力臂）。令左右推力为 `T_L, T_R`。约定 z 轴向下，`τ_r > 0` 为右转（顺时针）：
 
 $$
-\tau_u=T_L+T_R,\qquad \tau_r=b\,(T_R-T_L)
+\tau_u=T_L+T_R,\qquad \tau_r=b\,(T_L-T_R)
 $$
 
 反解：
 
 $$
-T_L=\frac{1}{2}\left(\tau_u-\frac{\tau_r}{b}\right),\qquad
-T_R=\frac{1}{2}\left(\tau_u+\frac{\tau_r}{b}\right)
+T_L=\frac{1}{2}\left(\tau_u+\frac{\tau_r}{b}\right),\qquad
+T_R=\frac{1}{2}\left(\tau_u-\frac{\tau_r}{b}\right)
 $$
 
 工程处理：
@@ -261,8 +261,8 @@ class MomentumController:
         return tau
 
     def _allocate(self, tau):
-        tl = 0.5 * (tau[0] - tau[2] / self.b)
-        tr = 0.5 * (tau[0] + tau[2] / self.b)
+        tl = 0.5 * (tau[0] + tau[2] / self.b)
+        tr = 0.5 * (tau[0] - tau[2] / self.b)
         scale = max(abs(tl), abs(tr)) / self.t_max
         saturated = scale > 1.0
         if saturated:
@@ -270,7 +270,7 @@ class MomentumController:
         return self.thrust_to_cmd(tl), self.thrust_to_cmd(tr), saturated
 ```
 
-> `C(nu)`、`D(nu)` 按 2.3 节辨识模型实现，`thrust_to_cmd` 按台架标定曲线实现；示例省略了参数合法性检查、模式管理与故障处理，不能直接作为飞行代码使用。
+> `C(nu)`、`D(nu)` 按 2.3 节辨识模型实现，`thrust_to_cmd` 按台架标定曲线实现；示例省略了参数合法性检查、模式管理与故障处理，不能直接作为上船控制代码使用。
 
 
 ### 2.4.5 抗扰与自适应
@@ -349,7 +349,7 @@ stateDiagram-v2
 | 云端失联 | 30 s 无心跳 | 继续任务，本地缓存 | 自动重连 |
 | 云端失联 > 10 min | 心跳持续丢失 | 完成任务后 RTL | 自动 |
 | GPS 丢失 | 60 s 无有效定位 | 减速、保持航向、低速待命（可能随流漂移）并告警 | GPS 恢复/人工 |
-| RTK 降级 | fix < 4 | 限速，标记数据 | 恢复固定解 |
+| RTK 降级 | fix < 6（非固定解） | 限速，标记数据 | 恢复固定解 |
 | 低电一级 | 24.0 V | 告警，停止新任务 | 充电 |
 | 低电二级 | 23.2 V | RTL | 充电 |
 | 低电三级 | 22.4 V | 停船，保留通信 | 人工 |
