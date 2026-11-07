@@ -1,0 +1,5 @@
+{
+  "publish_button": ["role:button:发布"],
+  "caption_editor": ["css:.zone-container [contenteditable='true']"],
+  "title_input": ["placeholder:作品标题"]
+}

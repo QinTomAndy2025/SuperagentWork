@@ -1,0 +1,7 @@
+{
+  "type": "images",
+  "images": ["media/1.jpg", "media/2.png"],
+  "title": "示例图文标题",
+  "caption": "示例图文文案。",
+  "tags": ["图文"]
+}
